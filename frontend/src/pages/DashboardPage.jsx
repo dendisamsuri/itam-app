@@ -7,7 +7,7 @@ import {
   InputLabel, Select, MenuItem, Stack, Card, CardContent, Skeleton, Divider,
   CardActions, Chip, TableContainer, Table, TableHead, TableRow, TableCell,
   TableBody, IconButton, TablePagination, Menu, Dialog, DialogTitle,
-  DialogContent, DialogContentText, Alert, Autocomplete, useTheme, useMediaQuery
+  DialogContent, DialogContentText, DialogActions, Alert, Autocomplete, useTheme, useMediaQuery
 } from '@mui/material';
 import {
   Add as AddIcon, Search as SearchIcon, QrCodeScanner as QrCodeScannerIcon,
