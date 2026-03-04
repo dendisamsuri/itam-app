@@ -49,7 +49,7 @@ function AddUserPage() {
                     <PersonAddIcon color="primary" /> Add New User
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                    Add a new user account to the ITAM system.
+                    Add a new user account to the IT Asset Management system.
                 </Typography>
 
                 {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}

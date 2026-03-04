@@ -89,9 +89,6 @@ function MainLayout() {
         </Avatar>
         <Box>
           <Typography variant="subtitle1" sx={{ color: '#fff', lineHeight: 1.2, fontWeight: 700, fontSize: '0.95rem' }}>
-            ITAM System
-          </Typography>
-          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.7rem' }}>
             IT Asset Management
           </Typography>
         </Box>
@@ -115,7 +112,7 @@ function MainLayout() {
                 <ListItemButton
                   selected={isSelected}
                   onClick={() => { navigate(item.path); if (isMobile) setMobileOpen(false); }}
-                  sx={{ px: 2, py: 1.2 }}
+                  sx={{ px: 2, py: 1.2, borderTopLeftRadius: 0, borderTopRightRadius: 0 }}
                 >
                   <ListItemIcon sx={{ minWidth: 38 }}>{item.icon}</ListItemIcon>
                   <ListItemText
@@ -165,7 +162,7 @@ function MainLayout() {
             </IconButton>
             <InventoryIcon sx={{ mr: 1, fontSize: 20 }} />
             <Typography variant="h6" noWrap sx={{ fontWeight: 700, fontSize: '1rem', letterSpacing: '-0.02em' }}>
-              ITAM System
+              IT Asset Management
             </Typography>
           </Toolbar>
         </AppBar>

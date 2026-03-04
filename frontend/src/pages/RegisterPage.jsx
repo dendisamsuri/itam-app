@@ -97,9 +97,6 @@ function RegisterPage() {
             <InventoryIcon sx={{ color: '#fff', fontSize: 28 }} />
           </Box>
           <Typography variant="h6" sx={{ color: '#fff', fontWeight: 800 }}>
-            ITAM System
-          </Typography>
-          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.8)' }}>
             IT Asset Management
           </Typography>
         </Box>
