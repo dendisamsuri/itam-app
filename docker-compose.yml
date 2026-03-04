@@ -1,0 +1,41 @@
+services:
+  db:
+    image: postgres:15
+    container_name: itam-db
+    restart: always
+    environment:
+      POSTGRES_USER: admin_itam
+      POSTGRES_PASSWORD: 1t4m3f7V8?kfYOp+
+      POSTGRES_DB: itam
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - postgres_data:/var/lib/postgresql/data
+
+  backend:
+    build: ./backend
+    container_name: itam-api
+    ports:
+      - "3001:3001"
+    environment:
+      DATABASE_URL: postgres://admin_itam:1t4m3f7V8%3FkfYOp%2B@db:5432/itam
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    depends_on:
+      - db
+
+  frontend:
+    build: ./frontend
+    container_name: itam-ui
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    stdin_open: true
+    tty: true
+
+volumes:
+  postgres_data:
