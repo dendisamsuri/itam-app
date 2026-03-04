@@ -46,6 +46,7 @@ function MainLayout() {
 
   const [user, setUser] = useState(null);
   const isSuperAdmin = user?.role === 'superadmin';
+  const isAdmin = user?.role === 'admin';
 
   useEffect(() => {
     getTokenPayload().then(u => setUser(u));
@@ -56,8 +57,10 @@ function MainLayout() {
     { text: 'Employee List', path: '/employees', icon: <PersonAddIcon /> },
     { text: 'Asset History', path: '/history', icon: <HistoryIcon /> },
     { text: 'Repair History', path: '/repairs', icon: <BuildIcon /> },
+    ...((isSuperAdmin || isAdmin) ? [
+      { text: 'Add Asset', path: '/add', icon: <AddIcon /> }
+    ] : []),
     ...(isSuperAdmin ? [
-      { text: 'Add Asset', path: '/add', icon: <AddIcon /> },
       { text: 'Add User', path: '/add-user', icon: <PersonAddIcon /> }
     ] : [])
   ];

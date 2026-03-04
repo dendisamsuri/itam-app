@@ -29,6 +29,7 @@ function EmployeeListPage() {
 
     const [user, setUser] = useState(null);
     const isSuperAdmin = user?.role === 'superadmin';
+    const isAdmin = user?.role === 'admin';
 
     useEffect(() => {
         getTokenPayload().then(u => setUser(u));
@@ -124,7 +125,7 @@ function EmployeeListPage() {
                         Manage and view all registered employees within the organization.
                     </Typography>
                 </Box>
-                {isSuperAdmin && (
+                {(isSuperAdmin || isAdmin) && (
                     <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenAddDialog}>
                         Add Employee
                     </Button>

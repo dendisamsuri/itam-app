@@ -64,6 +64,7 @@ function DashboardPage() {
 
   const [user, setUser] = useState(null);
   const isSuperAdmin = user?.role === 'superadmin';
+  const isAdmin = user?.role === 'admin';
 
   useEffect(() => {
     getTokenPayload().then(u => setUser(u));
@@ -280,7 +281,7 @@ function DashboardPage() {
             {filteredAssets.length} assets found
           </Typography>
         </Box>
-        {(!isMobile && isSuperAdmin) && (
+        {(!isMobile && (isSuperAdmin || isAdmin)) && (
           <Button
             variant="contained"
             startIcon={<AddIcon />}
@@ -408,7 +409,7 @@ function DashboardPage() {
                 </CardContent>
                 <Divider />
                 <CardActions sx={{ px: 2, py: 1, justifyContent: 'flex-end' }}>
-                  {isSuperAdmin && (
+                  {(isSuperAdmin || isAdmin) && (
                     <>
                       <Button
                         size="small" variant="outlined"
@@ -533,7 +534,7 @@ function DashboardPage() {
         anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
         PaperProps={{ sx: { borderRadius: 2, minWidth: 160 } }}
       >
-        {isSuperAdmin && (
+        {(isSuperAdmin || isAdmin) && (
           <MenuItem onClick={() => handleMenuAction('HANDOVER')}>
             Handover
           </MenuItem>
@@ -547,7 +548,7 @@ function DashboardPage() {
         <MenuItem onClick={() => handleMenuAction('REPAIR')}>
           Repair History
         </MenuItem>
-        {isSuperAdmin && (
+        {(isSuperAdmin || isAdmin) && (
           <MenuItem onClick={() => handleMenuAction('RETURN')} disabled={menuAsset?.status === 'Ready'}>
             Return
           </MenuItem>

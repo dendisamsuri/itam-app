@@ -54,6 +54,7 @@ function AssetDetailsPage() {
 
     const [user, setUser] = useState(null);
     const isSuperAdmin = user?.role === 'superadmin';
+    const isAdmin = user?.role === 'admin';
 
     useEffect(() => {
         getTokenPayload().then(u => setUser(u));
@@ -158,7 +159,7 @@ function AssetDetailsPage() {
                 <Box sx={{ flex: 1 }}>
                     <Typography variant="h5" sx={{ fontWeight: 800, letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: 1 }}>
                         Asset Details
-                        {isSuperAdmin && !isEditing && (
+                        {(isSuperAdmin || isAdmin) && !isEditing && (
                             <Button size="small" variant="outlined" startIcon={<EditIcon />} onClick={() => setIsEditing(true)} sx={{ ml: 2 }}>
                                 Edit
                             </Button>
