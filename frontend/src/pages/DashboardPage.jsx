@@ -96,8 +96,8 @@ function DashboardPage() {
     if (isScanning) {
       // Dynamically import the scanner library only when needed
       import('html5-qrcode').then((module) => {
-        Html5QrcodeScanner = module.Html5QrcodeScanner;
-        scanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: { width: 250, height: 250 } }, false);
+        const ScannerClass = module.Html5QrcodeScanner;
+        scanner = new ScannerClass("reader", { fps: 10, qrbox: { width: 250, height: 250 } }, false);
         scanner.render(
           (decodedText) => { setSearchQuery(decodedText); setIsScanning(false); scanner.clear(); },
           () => { }
