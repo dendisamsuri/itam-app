@@ -2,6 +2,18 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { v4 as uuidv4 } from 'uuid';
+import {
+  Box, Typography, Paper, Grid, TextField, InputAdornment, Button, FormControl,
+  InputLabel, Select, MenuItem, Stack, Card, CardContent, Skeleton, Divider,
+  CardActions, Chip, TableContainer, Table, TableHead, TableRow, TableCell,
+  TableBody, IconButton, TablePagination, Menu, Dialog, DialogTitle,
+  DialogContent, DialogContentText, Alert, Autocomplete, useTheme, useMediaQuery
+} from '@mui/material';
+import {
+  Add as AddIcon, Search as SearchIcon, QrCodeScanner as QrCodeScannerIcon,
+  Person as PersonIcon, SearchOff as NoResultsIcon, LocalOffer as TagIcon,
+  MoreVert as MoreVertIcon
+} from '@mui/icons-material';
 
 const getTokenPayload = async () => {
   try {
