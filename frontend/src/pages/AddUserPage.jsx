@@ -62,6 +62,7 @@ function AddUserPage() {
                     <TextField fullWidth label="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required sx={{ mb: 2 }} />
                     <TextField select fullWidth label="Role" value={role} onChange={(e) => setRole(e.target.value)} sx={{ mb: 4 }}>
                         <MenuItem value="user">Regular User</MenuItem>
+                        <MenuItem value="admin">Admin</MenuItem>
                         <MenuItem value="superadmin">Superadmin</MenuItem>
                     </TextField>
                     <Button type="submit" fullWidth variant="contained" size="large" disabled={loading} startIcon={<PersonAddIcon />}>
