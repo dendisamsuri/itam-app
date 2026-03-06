@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
+import apiLocal from '../apiLocal';
 import {
     Box, Typography, Card, CardContent, Table, TableBody, TableCell, TableContainer,
     TableHead, TableRow, Paper, CircularProgress, Alert, Button, Dialog, DialogTitle,
@@ -56,36 +57,60 @@ function EmployeeListPage() {
             return;
         }
         try {
-            const { error } = await supabase.from('employees').insert({
-                name: addFormData.name,
-                department: addFormData.department || null,
-                email: addFormData.email || null
-            });
-            if (error) throw error;
+            if (import.meta.env.VITE_APP_ENV === 'local') {
+                await apiLocal.post('/employees', {
+                    name: addFormData.name,
+                    department: addFormData.department || null,
+                    email: addFormData.email || null
+                });
 
-            setSnackbar({ open: true, message: 'Employee added successfully!' });
-            setOpenAddDialog(false);
-            fetchEmployees();
+                setSnackbar({ open: true, message: 'Employee added successfully!' });
+                setOpenAddDialog(false);
+                fetchEmployees();
+            } else {
+                const { error } = await supabase.from('employees').insert({
+                    name: addFormData.name,
+                    department: addFormData.department || null,
+                    email: addFormData.email || null
+                });
+                if (error) throw error;
+
+                setSnackbar({ open: true, message: 'Employee added successfully!' });
+                setOpenAddDialog(false);
+                fetchEmployees();
+            }
         } catch (err) {
-            setAddError(err.message || 'Failed to add employee');
+            if (err.response && err.response.data && err.response.data.error) {
+                setAddError(err.response.data.error);
+            } else {
+                setAddError(err.message || 'Failed to add employee');
+            }
         }
     };
 
     const fetchEmployees = useCallback(async () => {
         try {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session) { navigate('/login'); return; }
+            if (import.meta.env.VITE_APP_ENV === 'local') {
+                const token = localStorage.getItem('token');
+                if (!token) { navigate('/login'); return; }
 
-            const { data, error: fetchErr } = await supabase
-                .from('employees')
-                .select('id, name, department, email')
-                .order('name', { ascending: true });
+                const { data } = await apiLocal.get('/employees');
+                setEmployees(data || []);
+            } else {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (!session) { navigate('/login'); return; }
 
-            if (fetchErr) throw fetchErr;
-            setEmployees(data || []);
+                const { data, error: fetchErr } = await supabase
+                    .from('employees')
+                    .select('id, name, department, email')
+                    .order('name', { ascending: true });
+
+                if (fetchErr) throw fetchErr;
+                setEmployees(data || []);
+            }
         } catch (err) {
             setError(err.message || 'Failed to fetch employees.');
-            if (err.message?.includes('JWT')) navigate('/login');
+            if (err?.response?.status === 401 || err?.message?.includes('JWT')) navigate('/login');
         } finally {
             setLoading(false);
         }

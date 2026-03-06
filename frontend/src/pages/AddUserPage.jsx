@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Box, Typography, TextField, Button, Alert, Paper, MenuItem } from '@mui/material';
 import { PersonAddOutlined as PersonAddIcon } from '@mui/icons-material';
 import { supabase } from '../supabaseClient';
+import apiLocal from '../apiLocal';
 
 function AddUserPage() {
     const [name, setName] = useState('');
@@ -19,24 +20,41 @@ function AddUserPage() {
         try {
             const email = username.includes('@') ? username : `${username}@itam.local`;
 
-            const { data, error: authError } = await supabase.auth.signUp({
-                email: email,
-                password: password,
-                options: {
-                    data: {
-                        name: name,
-                        department: department,
-                        role: role
+            if (import.meta.env.VITE_APP_ENV === 'local') {
+                await apiLocal.post('/register', {
+                    email,
+                    password,
+                    name,
+                    department,
+                    role
+                });
+
+                setSuccess("User successfully added!");
+                setName(''); setDepartment(''); setUsername(''); setPassword(''); setRole('user');
+            } else {
+                const { data, error: authError } = await supabase.auth.signUp({
+                    email: email,
+                    password: password,
+                    options: {
+                        data: {
+                            name: name,
+                            department: department,
+                            role: role
+                        }
                     }
-                }
-            });
+                });
 
-            if (authError) throw authError;
+                if (authError) throw authError;
 
-            setSuccess("User successfully added!");
-            setName(''); setDepartment(''); setUsername(''); setPassword(''); setRole('user');
+                setSuccess("User successfully added!");
+                setName(''); setDepartment(''); setUsername(''); setPassword(''); setRole('user');
+            }
         } catch (err) {
-            setError(err.message || 'Failed to add user.');
+            if (err.response && err.response.data && err.response.data.error) {
+                setError(err.response.data.error);
+            } else {
+                setError(err.message || 'Failed to add user.');
+            }
         } finally {
             setLoading(false);
         }

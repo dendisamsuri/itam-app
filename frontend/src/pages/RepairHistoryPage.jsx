@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
+import apiLocal from '../apiLocal';
 import {
   Paper, Typography, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Button, Box, Dialog, DialogActions,
@@ -49,30 +50,38 @@ function RepairHistoryPage() {
 
   const fetchRepairHistory = useCallback(async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) { navigate('/login'); return; }
+      if (import.meta.env.VITE_APP_ENV === 'local') {
+        const token = localStorage.getItem('token');
+        if (!token) { navigate('/login'); return; }
 
-      // Fetch asset
-      const { data: assetData, error: assetErr } = await supabase
-        .from('assets')
-        .select('id, name, serial_number')
-        .eq('id', assetId)
-        .single();
-      if (assetErr) throw assetErr;
-      setAsset(assetData);
+        const { data } = await apiLocal.get(`/assets/${assetId}/repairs`);
+        setAsset(data.asset);
+        setRepairs(data.repairs || []);
+      } else {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) { navigate('/login'); return; }
 
-      // Fetch repairs
-      const { data: repairData, error: repairErr } = await supabase
-        .from('repair_logs')
-        .select('*')
-        .eq('asset_id', assetId)
-        .order('repair_date', { ascending: false });
-      if (repairErr) throw repairErr;
-      setRepairs(repairData || []);
+        // Fetch asset
+        const { data: assetData, error: assetErr } = await supabase
+          .from('assets')
+          .select('id, name, serial_number')
+          .eq('id', assetId)
+          .single();
+        if (assetErr) throw assetErr;
+        setAsset(assetData);
 
+        // Fetch repairs
+        const { data: repairData, error: repairErr } = await supabase
+          .from('repair_logs')
+          .select('*')
+          .eq('asset_id', assetId)
+          .order('repair_date', { ascending: false });
+        if (repairErr) throw repairErr;
+        setRepairs(repairData || []);
+      }
     } catch (err) {
       setPageError(err.message || 'Failed to load repair history.');
-      if (err.message?.includes('JWT')) navigate('/login');
+      if (err?.response?.status === 401 || err?.message?.includes('JWT')) navigate('/login');
     } finally {
       setLoading(false);
     }
@@ -109,22 +118,36 @@ function RepairHistoryPage() {
     }
     setFormError('');
     try {
-      const { error } = await supabase.from('repair_logs').insert({
-        ...formData,
-        asset_id: assetId,
-        completion_date: formData.completion_date || null
-      });
-      if (error) throw error;
+      if (import.meta.env.VITE_APP_ENV === 'local') {
+        await apiLocal.post(`/assets/${assetId}/repairs`, {
+          ...formData
+        });
 
-      if (formData.status === 'broken') {
-        await supabase.from('assets').update({ status: 'Broken' }).eq('id', assetId);
+        handleCloseDialog();
+        fetchRepairHistory();
+        setSnackbar({ open: true, message: '✅ Repair log added successfully!' });
+      } else {
+        const { error } = await supabase.from('repair_logs').insert({
+          ...formData,
+          asset_id: assetId,
+          completion_date: formData.completion_date || null
+        });
+        if (error) throw error;
+
+        if (formData.status === 'broken') {
+          await supabase.from('assets').update({ status: 'Broken' }).eq('id', assetId);
+        }
+
+        handleCloseDialog();
+        fetchRepairHistory();
+        setSnackbar({ open: true, message: '✅ Repair log added successfully!' });
       }
-
-      handleCloseDialog();
-      fetchRepairHistory();
-      setSnackbar({ open: true, message: '✅ Repair log added successfully!' });
     } catch (err) {
-      setFormError(err.message || 'An error occurred.');
+      if (err.response && err.response.data && err.response.data.error) {
+        setFormError(err.response.data.error);
+      } else {
+        setFormError(err.message || 'An error occurred.');
+      }
     }
   };
 

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
+import apiLocal from '../apiLocal';
 import {
   Box, Typography, TextField, Button, Link, Alert,
   InputAdornment, IconButton, CircularProgress
@@ -28,27 +29,43 @@ function RegisterPage() {
     setSuccess('');
     setLoading(true);
     try {
-      // Supabase requires an email, so we append a dummy domain to the username if not an email
-      const email = username.includes('@') ? username : `${username}@itam.local`;
+      if (import.meta.env.VITE_APP_ENV === 'local') {
+        await apiLocal.post('/register', {
+          name,
+          department,
+          username,
+          password,
+          role: 'user' // Default role
+        });
+        setSuccess('Registration successful! You will be redirected to the login page.');
+        setTimeout(() => navigate('/login'), 2000);
+      } else {
+        // Supabase requires an email, so we append a dummy domain to the username if not an email
+        const email = username.includes('@') ? username : `${username}@itam.local`;
 
-      const { data, error: authError } = await supabase.auth.signUp({
-        email: email,
-        password: password,
-        options: {
-          data: {
-            name: name,
-            department: department,
-            role: 'user'
+        const { data, error: authError } = await supabase.auth.signUp({
+          email: email,
+          password: password,
+          options: {
+            data: {
+              name: name,
+              department: department,
+              role: 'user'
+            }
           }
-        }
-      });
+        });
 
-      if (authError) throw authError;
+        if (authError) throw authError;
 
-      setSuccess('Registration successful! You will be redirected to the login page.');
-      setTimeout(() => navigate('/login'), 2000);
+        setSuccess('Registration successful! You will be redirected to the login page.');
+        setTimeout(() => navigate('/login'), 2000);
+      }
     } catch (err) {
-      setError(err.message || 'Registration failed. Please try again.');
+      if (err.response && err.response.data && err.response.data.error) {
+        setError(err.response.data.error);
+      } else {
+        setError(err.message || 'Registration failed. Please try again.');
+      }
     } finally {
       setLoading(false);
     }

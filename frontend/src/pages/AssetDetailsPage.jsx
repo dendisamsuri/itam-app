@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
+import apiLocal from '../apiLocal';
 import {
     Paper, Typography, TextField, Button, Box, Grid, Alert,
     Divider, InputAdornment, Skeleton, Snackbar, IconButton
@@ -62,34 +63,57 @@ function AssetDetailsPage() {
 
     const fetchAssetDetails = useCallback(async () => {
         try {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session) { navigate('/login'); return; }
+            setLoading(true);
+            if (import.meta.env.VITE_APP_ENV === 'local') {
+                const token = localStorage.getItem('token');
+                if (!token) { navigate('/login'); return; }
 
-            const { data: asset, error: fetchErr } = await supabase
-                .from('assets')
-                .select('*')
-                .eq('id', assetId)
-                .single();
+                const { data: asset } = await apiLocal.get(`/assets/${assetId}`);
 
-            if (fetchErr) throw fetchErr;
+                // Format dates for input type="date"
+                if (asset.purchase_date) asset.purchase_date = asset.purchase_date.split('T')[0];
+                if (asset.warranty_expiry) asset.warranty_expiry = asset.warranty_expiry.split('T')[0];
 
-            // Format dates for input type="date"
-            if (asset.purchase_date) asset.purchase_date = asset.purchase_date.split('T')[0];
-            if (asset.warranty_expiry) asset.warranty_expiry = asset.warranty_expiry.split('T')[0];
+                setFormData({
+                    serial_number: asset.serial_number || '',
+                    name: asset.name || '',
+                    brand: asset.brand || '',
+                    model: asset.model || '',
+                    specs: asset.specs || '',
+                    photo_url: asset.photo_url || '',
+                    purchase_date: asset.purchase_date || '',
+                    warranty_expiry: asset.warranty_expiry || ''
+                });
+            } else {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (!session) { navigate('/login'); return; }
 
-            setFormData({
-                serial_number: asset.serial_number || '',
-                name: asset.name || '',
-                brand: asset.brand || '',
-                model: asset.model || '',
-                specs: asset.specs || '',
-                photo_url: asset.photo_url || '',
-                purchase_date: asset.purchase_date || '',
-                warranty_expiry: asset.warranty_expiry || ''
-            });
+                const { data: asset, error: fetchErr } = await supabase
+                    .from('assets')
+                    .select('*')
+                    .eq('id', assetId)
+                    .single();
+
+                if (fetchErr) throw fetchErr;
+
+                // Format dates for input type="date"
+                if (asset.purchase_date) asset.purchase_date = asset.purchase_date.split('T')[0];
+                if (asset.warranty_expiry) asset.warranty_expiry = asset.warranty_expiry.split('T')[0];
+
+                setFormData({
+                    serial_number: asset.serial_number || '',
+                    name: asset.name || '',
+                    brand: asset.brand || '',
+                    model: asset.model || '',
+                    specs: asset.specs || '',
+                    photo_url: asset.photo_url || '',
+                    purchase_date: asset.purchase_date || '',
+                    warranty_expiry: asset.warranty_expiry || ''
+                });
+            }
         } catch (err) {
             setError(err.message || 'Failed to load asset details.');
-            if (err.message?.includes('JWT')) navigate('/login');
+            if (err?.response?.status === 401 || err?.message?.includes('JWT')) navigate('/login');
         } finally {
             setLoading(false);
         }
@@ -110,18 +134,33 @@ function AssetDetailsPage() {
         setError('');
 
         try {
-            const { error: updErr } = await supabase
-                .from('assets')
-                .update({ ...formData, updated_by: user?.name || 'User' })
-                .eq('id', assetId);
+            if (import.meta.env.VITE_APP_ENV === 'local') {
+                const { error: updErr } = await apiLocal.put(`/assets/${assetId}`, {
+                    ...formData
+                });
+                if (updErr) throw updErr;
 
-            if (updErr) throw updErr;
+                setSnackbar({ open: true, message: 'Asset updated successfully!', severity: 'success' });
+                setIsEditing(false);
+                fetchAssetDetails();
+            } else {
+                const { error: updErr } = await supabase
+                    .from('assets')
+                    .update({ ...formData, updated_by: user?.name || 'User' })
+                    .eq('id', assetId);
 
-            setSnackbar({ open: true, message: 'Asset updated successfully!', severity: 'success' });
-            setIsEditing(false);
-            fetchAssetDetails(); // Refresh to catch updated_by etc if needed
+                if (updErr) throw updErr;
+
+                setSnackbar({ open: true, message: 'Asset updated successfully!', severity: 'success' });
+                setIsEditing(false);
+                fetchAssetDetails(); // Refresh to catch updated_by etc if needed
+            }
         } catch (err) {
-            setError(err.message || 'Failed to update asset. Please try again.');
+            if (err.response && err.response.data && err.response.data.error) {
+                setError(err.response.data.error);
+            } else {
+                setError(err.message || 'Failed to update asset. Please try again.');
+            }
         } finally {
             setSaving(false);
         }

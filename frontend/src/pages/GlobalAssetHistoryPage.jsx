@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../supabaseClient';
+import apiLocal from '../apiLocal';
 import {
     Box, Typography, Card, CardContent, Table, TableBody, TableCell, TableContainer,
     TableHead, TableRow, Paper, CircularProgress, Alert, TextField, InputAdornment,
@@ -24,20 +25,26 @@ function GlobalAssetHistoryPage() {
 
     const fetchHistory = useCallback(async () => {
         try {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session) {
-                // If not using router navigate here, just assume it will be handled or ignore.
-                // Usually handled by parent Route wrapper, but let's be safe.
-                return;
+            if (import.meta.env.VITE_APP_ENV === 'local') {
+                const token = localStorage.getItem('token');
+                if (!token) return;
+
+                const { data } = await apiLocal.get('/history');
+                setHistory(data || []);
+            } else {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (!session) {
+                    return;
+                }
+
+                const { data, error } = await supabase
+                    .from('asset_history_view')
+                    .select('*')
+                    .order('created_at', { ascending: false });
+
+                if (error) throw error;
+                setHistory(data || []);
             }
-
-            const { data, error } = await supabase
-                .from('asset_history_view')
-                .select('*')
-                .order('created_at', { ascending: false });
-
-            if (error) throw error;
-            setHistory(data || []);
         } catch (err) {
             setError(err.message || 'Failed to fetch global asset history.');
         } finally {

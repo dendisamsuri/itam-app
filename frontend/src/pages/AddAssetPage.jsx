@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Barcode from 'react-barcode';
 import { supabase } from '../supabaseClient';
+import apiLocal from '../apiLocal';
 import {
   Paper, Typography, TextField, Button, Box, Grid, Alert,
   Divider, InputAdornment, Snackbar
@@ -34,33 +35,55 @@ function AddAssetPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
+      if (import.meta.env.VITE_APP_ENV === 'local') {
+        const payload = {
+          serial_number: formData.serial_number,
+          name: formData.name,
+          brand: formData.brand,
+          model: formData.model,
+          specs: formData.specs,
+          photo_url: formData.photo_url || null,
+          purchase_date: formData.purchase_date || null,
+          warranty_expiry: formData.warranty_expiry || null
+        };
+        await apiLocal.post('/assets', payload);
 
-      const createdBy = user.user_metadata?.name || 'User';
+        setSnackbar({ open: true, message: `✅ Asset created successfully!`, severity: 'success' });
+        setFormData({ serial_number: '', name: '', brand: '', model: '', specs: '', photo_url: '', purchase_date: '', warranty_expiry: '' });
+        setTimeout(() => navigate('/'), 2000);
+      } else {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error("Not authenticated");
 
-      const payload = {
-        serial_number: formData.serial_number,
-        name: formData.name,
-        brand: formData.brand,
-        model: formData.model,
-        specs: formData.specs,
-        photo_url: formData.photo_url || null,
-        purchase_date: formData.purchase_date || null,
-        warranty_expiry: formData.warranty_expiry || null,
-        created_by: createdBy,
-        updated_by: createdBy,
-        status: 'Ready'
-      };
+        const createdBy = user.user_metadata?.name || 'User';
 
-      const { data, error } = await supabase.from('assets').insert(payload).select().single();
-      if (error) throw error;
+        const payload = {
+          serial_number: formData.serial_number,
+          name: formData.name,
+          brand: formData.brand,
+          model: formData.model,
+          specs: formData.specs,
+          photo_url: formData.photo_url || null,
+          purchase_date: formData.purchase_date || null,
+          warranty_expiry: formData.warranty_expiry || null,
+          created_by: createdBy,
+          updated_by: createdBy,
+          status: 'Ready'
+        };
 
-      setSnackbar({ open: true, message: `✅ Asset created successfully!`, severity: 'success' });
-      setFormData({ serial_number: '', name: '', brand: '', model: '', specs: '', photo_url: '', purchase_date: '', warranty_expiry: '' });
-      setTimeout(() => navigate('/'), 2000);
+        const { data, error } = await supabase.from('assets').insert(payload).select().single();
+        if (error) throw error;
+
+        setSnackbar({ open: true, message: `✅ Asset created successfully!`, severity: 'success' });
+        setFormData({ serial_number: '', name: '', brand: '', model: '', specs: '', photo_url: '', purchase_date: '', warranty_expiry: '' });
+        setTimeout(() => navigate('/'), 2000);
+      }
     } catch (error) {
-      setSnackbar({ open: true, message: `❌ ${error.message || 'Unknown error'}`, severity: 'error' });
+      if (error.response && error.response.data && error.response.data.error) {
+        setSnackbar({ open: true, message: `❌ ${error.response.data.error}`, severity: 'error' });
+      } else {
+        setSnackbar({ open: true, message: `❌ ${error.message || 'Unknown error'}`, severity: 'error' });
+      }
     } finally {
       setLoading(false);
     }

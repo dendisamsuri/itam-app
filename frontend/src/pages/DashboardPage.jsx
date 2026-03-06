@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
+import apiLocal from '../apiLocal';
 import { v4 as uuidv4 } from 'uuid';
 import {
   Box, Typography, Paper, Grid, TextField, InputAdornment, Button, FormControl,
@@ -73,18 +74,27 @@ function DashboardPage() {
   const fetchAssets = useCallback(async () => {
     try {
       setLoading(true);
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) { navigate('/login'); return; }
+      if (import.meta.env.VITE_APP_ENV === 'local') {
+        const token = localStorage.getItem('token');
+        if (!token) { navigate('/login'); return; }
+        const { data } = await apiLocal.get('/assets');
+        setAssets(data || []);
+      } else {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) { navigate('/login'); return; }
 
-      const { data, error } = await supabase
-        .from('assets')
-        .select('*')
-        .order('id', { ascending: false });
+        const { data, error } = await supabase
+          .from('assets')
+          .select('*')
+          .order('id', { ascending: false });
 
-      if (error) throw error;
-      setAssets(data || []);
+        if (error) throw error;
+        setAssets(data || []);
+      }
     } catch (err) {
-      if (err.message?.includes('JWT')) navigate('/login');
+      if (err?.response?.status === 401 || err?.message?.includes('JWT')) {
+        navigate('/login');
+      }
     } finally {
       setLoading(false);
     }
@@ -117,12 +127,17 @@ function DashboardPage() {
     const timer = setTimeout(async () => {
       if (autocompleteInputValue) {
         try {
-          const { data, error } = await supabase
-            .from('employees')
-            .select('id, name, department, email')
-            .ilike('name', `%${autocompleteInputValue}%`)
-            .order('name');
-          if (!error) setEmployeeOptions(data || []);
+          if (import.meta.env.VITE_APP_ENV === 'local') {
+            const { data } = await apiLocal.get(`/employees/search?q=${encodeURIComponent(autocompleteInputValue)}`);
+            setEmployeeOptions(data || []);
+          } else {
+            const { data, error } = await supabase
+              .from('employees')
+              .select('id, name, department, email')
+              .ilike('name', `%${autocompleteInputValue}%`)
+              .order('name');
+            if (!error) setEmployeeOptions(data || []);
+          }
         } catch { }
       } else {
         setEmployeeOptions([]);
@@ -147,62 +162,78 @@ function DashboardPage() {
     }
     setError('');
     try {
-      let to_user_id = null;
-      let to_user_name = null;
+      if (import.meta.env.VITE_APP_ENV === 'local') {
+        await apiLocal.post(`/assets/${selectedAsset.id}/action`, {
+          action_type: actionType,
+          recipient_name: finalRecipientName,
+          recipient_department: recipientDepartment,
+          recipient_email: recipientEmail,
+          notes: notes
+        });
+        fetchAssets();
+        handleCloseDialog();
+      } else {
+        let to_user_id = null;
+        let to_user_name = null;
 
-      if (actionType === 'HANDOVER') {
-        to_user_name = finalRecipientName;
-        // Check if employee exists
-        let { data: empData } = await supabase.from('employees')
-          .select('id')
-          .eq('name', to_user_name)
-          .maybeSingle();
+        if (actionType === 'HANDOVER') {
+          to_user_name = finalRecipientName;
+          // Check if employee exists
+          let { data: empData } = await supabase.from('employees')
+            .select('id')
+            .eq('name', to_user_name)
+            .maybeSingle();
 
-        if (empData) {
-          to_user_id = empData.id;
-          if (recipientDepartment || recipientEmail) {
-            await supabase.from('employees').update({
-              department: recipientDepartment || null,
-              email: recipientEmail || null
-            }).eq('id', to_user_id);
+          if (empData) {
+            to_user_id = empData.id;
+            if (recipientDepartment || recipientEmail) {
+              await supabase.from('employees').update({
+                department: recipientDepartment || null,
+                email: recipientEmail || null
+              }).eq('id', to_user_id);
+            }
+          } else {
+            const { data: newEmp, error: insErr } = await supabase.from('employees')
+              .insert({
+                name: to_user_name,
+                department: recipientDepartment || null,
+                email: recipientEmail || null
+              }).select().single();
+            if (insErr) throw insErr;
+            to_user_id = newEmp.id;
           }
-        } else {
-          const { data: newEmp, error: insErr } = await supabase.from('employees')
-            .insert({
-              name: to_user_name,
-              department: recipientDepartment || null,
-              email: recipientEmail || null
-            }).select().single();
-          if (insErr) throw insErr;
-          to_user_id = newEmp.id;
         }
+
+        const status = actionType === 'HANDOVER' ? 'In Use' : 'Ready';
+
+        // Update asset
+        const { error: updErr } = await supabase.from('assets').update({
+          status,
+          assigned_to: to_user_name,
+          assigned_to_id: to_user_id
+        }).eq('id', selectedAsset.id);
+        if (updErr) throw updErr;
+
+        // Log history
+        await supabase.from('asset_history').insert({
+          asset_id: selectedAsset.id,
+          action_type: actionType,
+          from_user: selectedAsset.assigned_to,
+          to_user: to_user_name,
+          notes,
+          from_user_id: selectedAsset.assigned_to_id,
+          to_user_id: to_user_id
+        });
+
+        fetchAssets();
+        handleCloseDialog();
       }
-
-      const status = actionType === 'HANDOVER' ? 'In Use' : 'Ready';
-
-      // Update asset
-      const { error: updErr } = await supabase.from('assets').update({
-        status,
-        assigned_to: to_user_name,
-        assigned_to_id: to_user_id
-      }).eq('id', selectedAsset.id);
-      if (updErr) throw updErr;
-
-      // Log history
-      await supabase.from('asset_history').insert({
-        asset_id: selectedAsset.id,
-        action_type: actionType,
-        from_user: selectedAsset.assigned_to,
-        to_user: to_user_name,
-        notes,
-        from_user_id: selectedAsset.assigned_to_id,
-        to_user_id: to_user_id
-      });
-
-      fetchAssets();
-      handleCloseDialog();
     } catch (err) {
-      setError(err.message || 'An error occurred.');
+      if (err.response && err.response.data && err.response.data.error) {
+        setError(err.response.data.error);
+      } else {
+        setError(err.message || 'An error occurred.');
+      }
     }
   };
 

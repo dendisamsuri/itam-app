@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
+import apiLocal from '../apiLocal';
 import {
   Box, Typography, TextField, Button, Link, Alert,
   InputAdornment, IconButton, CircularProgress
@@ -24,21 +25,34 @@ function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      // Supabase requires an email, so we append a dummy domain to the username
-      const email = username.includes('@') ? username : `${username}@itam.local`;
-      const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email: email,
-        password: password
-      });
-
-      if (authError) throw authError;
-
-      if (data.session) {
-        localStorage.setItem('token', data.session.access_token); // Keep for compatibility if needed elsewhere
+      if (import.meta.env.VITE_APP_ENV === 'local') {
+        const { data } = await apiLocal.post('/login', {
+          username,
+          password
+        });
+        localStorage.setItem('token', data.token);
         navigate('/');
+      } else {
+        // Supabase requires an email, so we append a dummy domain to the username
+        const email = username.includes('@') ? username : `${username}@itam.local`;
+        const { data, error: authError } = await supabase.auth.signInWithPassword({
+          email: email,
+          password: password
+        });
+
+        if (authError) throw authError;
+
+        if (data.session) {
+          localStorage.setItem('token', data.session.access_token); // Keep for compatibility if needed elsewhere
+          navigate('/');
+        }
       }
     } catch (err) {
-      setError(err.message || 'Login failed. Please try again.');
+      if (err.response && err.response.data && err.response.data.error) {
+        setError(err.response.data.error);
+      } else {
+        setError(err.message || 'Login failed. Please try again.');
+      }
     } finally {
       setLoading(false);
     }

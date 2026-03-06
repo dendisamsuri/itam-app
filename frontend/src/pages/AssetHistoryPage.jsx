@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
+import apiLocal from '../apiLocal';
 import {
     Box, Typography, Card, CardContent, Table, TableBody, TableCell, TableContainer,
     TableHead, TableRow, Paper, CircularProgress, Alert, Button, Divider, TablePagination
@@ -21,32 +22,40 @@ function AssetHistoryPage() {
 
     const fetchHistory = useCallback(async () => {
         try {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session) { navigate('/login'); return; }
+            if (import.meta.env.VITE_APP_ENV === 'local') {
+                const token = localStorage.getItem('token');
+                if (!token) { navigate('/login'); return; }
 
-            // Fetch asset details
-            const { data: assetData, error: assetErr } = await supabase
-                .from('assets')
-                .select('id, name, serial_number')
-                .eq('id', id)
-                .single();
+                const { data } = await apiLocal.get(`/assets/${id}/history`);
+                setAsset(data.asset);
+                setHistory(data.history || []);
+            } else {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (!session) { navigate('/login'); return; }
 
-            if (assetErr) throw assetErr;
-            setAsset(assetData);
+                // Fetch asset details
+                const { data: assetData, error: assetErr } = await supabase
+                    .from('assets')
+                    .select('id, name, serial_number')
+                    .eq('id', id)
+                    .single();
 
-            // Fetch history
-            const { data: historyData, error: historyErr } = await supabase
-                .from('asset_history')
-                .select('id, action_type, from_user, to_user, notes, created_at')
-                .eq('asset_id', id)
-                .order('created_at', { ascending: false });
+                if (assetErr) throw assetErr;
+                setAsset(assetData);
 
-            if (historyErr) throw historyErr;
-            setHistory(historyData || []);
+                // Fetch history
+                const { data: historyData, error: historyErr } = await supabase
+                    .from('asset_history')
+                    .select('id, action_type, from_user, to_user, notes, created_at')
+                    .eq('asset_id', id)
+                    .order('created_at', { ascending: false });
 
+                if (historyErr) throw historyErr;
+                setHistory(historyData || []);
+            }
         } catch (err) {
             setError(err.message || 'Failed to fetch asset history.');
-            if (err.message?.includes('JWT')) navigate('/login');
+            if (err?.response?.status === 401 || err?.message?.includes('JWT')) navigate('/login');
         } finally {
             setLoading(false);
         }

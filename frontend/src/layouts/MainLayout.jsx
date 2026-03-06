@@ -21,16 +21,40 @@ import {
 
 import { PersonAddOutlined as PersonAddIcon } from '@mui/icons-material';
 
+import apiLocal from '../apiLocal';
+
 const getTokenPayload = async () => {
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    return user ? {
-      id: user.id,
-      role: user.user_metadata?.role || 'user',
-      name: user.user_metadata?.name || 'User'
-    } : null;
-  } catch (e) {
-    return null;
+  if (import.meta.env.VITE_APP_ENV === 'local') {
+    const token = localStorage.getItem('token');
+    if (!token) return null;
+    try {
+      // Decode JWT token directly (client side) or use an API check
+      // As a simple workaround for local, since we just need the payload:
+      const base64Url = token.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(atob(base64).split('').map(function (c) {
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+      }).join(''));
+      const decoded = JSON.parse(jsonPayload);
+      return decoded.user ? {
+        id: decoded.user.id,
+        role: decoded.user.role || 'user',
+        name: decoded.user.name || 'User'
+      } : null;
+    } catch (e) {
+      return null;
+    }
+  } else {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      return user ? {
+        id: user.id,
+        role: user.user_metadata?.role || 'user',
+        name: user.user_metadata?.name || 'User'
+      } : null;
+    } catch (e) {
+      return null;
+    }
   }
 };
 
@@ -68,8 +92,10 @@ function MainLayout() {
   const handleDrawerToggle = () => setMobileOpen(!mobileOpen);
   const handleLogoutClick = () => setOpenLogoutDialog(true);
   const handleLogoutConfirm = async () => {
-    await supabase.auth.signOut();
-    localStorage.removeItem('token'); // Keep for App.jsx sync if needed
+    if (import.meta.env.VITE_APP_ENV !== 'local') {
+      await supabase.auth.signOut();
+    }
+    localStorage.removeItem('token');
     setOpenLogoutDialog(false);
     navigate('/login');
   };

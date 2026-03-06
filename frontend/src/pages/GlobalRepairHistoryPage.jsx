@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../supabaseClient';
+import apiLocal from '../apiLocal';
 import {
     Box, Typography, Card, CardContent, Table, TableBody, TableCell, TableContainer,
     TableHead, TableRow, Paper, CircularProgress, Alert, TextField, InputAdornment,
@@ -31,16 +32,24 @@ function GlobalRepairHistoryPage() {
 
     const fetchRepairs = useCallback(async () => {
         try {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session) return;
+            if (import.meta.env.VITE_APP_ENV === 'local') {
+                const token = localStorage.getItem('token');
+                if (!token) return;
 
-            const { data, error } = await supabase
-                .from('repair_logs_view')
-                .select('*')
-                .order('repair_date', { ascending: false });
+                const { data } = await apiLocal.get('/repairs');
+                setRepairs(data || []);
+            } else {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (!session) return;
 
-            if (error) throw error;
-            setRepairs(data || []);
+                const { data, error } = await supabase
+                    .from('repair_logs_view')
+                    .select('*')
+                    .order('repair_date', { ascending: false });
+
+                if (error) throw error;
+                setRepairs(data || []);
+            }
         } catch (err) {
             setError(err.message || 'Failed to fetch global repair history.');
         } finally {
