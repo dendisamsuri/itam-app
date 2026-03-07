@@ -59,12 +59,14 @@ const getTokenPayload = async () => {
 };
 
 const drawerWidth = 260;
+const miniDrawerWidth = 80;
 
 function MainLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'md'));
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openLogoutDialog, setOpenLogoutDialog] = useState(false);
 
@@ -103,51 +105,77 @@ function MainLayout() {
 
   const currentBottomNav = menuItems.findIndex(item => item.path === location.pathname);
 
+  // Dynamic values based on screen size
+  const actualDrawerWidth = isTablet ? miniDrawerWidth : drawerWidth;
+
   const drawerContent = (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflowX: 'hidden' }}>
       {/* Brand Header */}
       <Box
         sx={{
-          px: 3, py: 2.5,
+          px: isTablet ? 0 : 3, py: 3,
           background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
-          display: 'flex', alignItems: 'center', gap: 1.5,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          gap: 1.5,
+          minHeight: 80,
         }}
       >
-        <Avatar sx={{ bgcolor: 'rgba(255,255,255,0.2)', width: 38, height: 38 }}>
-          <InventoryIcon sx={{ fontSize: 20, color: '#fff' }} />
+        <Avatar sx={{ bgcolor: 'rgba(255,255,255,0.2)', width: 42, height: 42 }}>
+          <InventoryIcon sx={{ fontSize: 22, color: '#fff' }} />
         </Avatar>
-        <Box>
-          <Typography variant="subtitle1" sx={{ color: '#fff', lineHeight: 1.2, fontWeight: 700, fontSize: '0.95rem' }}>
+        {!isTablet && (
+          <Typography variant="subtitle1" sx={{ color: '#fff', fontWeight: 800, fontSize: '0.9rem', textAlign: 'center' }}>
             IT Asset Management
           </Typography>
-        </Box>
+        )}
         {isMobile && (
-          <IconButton onClick={handleDrawerToggle} sx={{ ml: 'auto', color: '#fff' }}>
+          <IconButton onClick={handleDrawerToggle} sx={{ position: 'absolute', right: 8, top: 8, color: '#fff' }}>
             <CloseIcon fontSize="small" />
           </IconButton>
         )}
       </Box>
 
       {/* Navigation */}
-      <Box sx={{ flex: 1, px: 2, py: 2 }}>
-        <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, fontSize: '0.7rem', pl: 1, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-          Menu
-        </Typography>
+      <Box sx={{ flex: 1, px: isTablet ? 1 : 2, py: 3 }}>
+        {!isTablet && (
+          <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700, fontSize: '0.7rem', pl: 1, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+            Main Menu
+          </Typography>
+        )}
         <List sx={{ mt: 1 }}>
           {menuItems.map((item) => {
             const isSelected = location.pathname === item.path;
             return (
-              <ListItem key={item.text} disablePadding>
+              <ListItem key={item.text} disablePadding sx={{ display: 'block' }}>
                 <ListItemButton
                   selected={isSelected}
                   onClick={() => { navigate(item.path); if (isMobile) setMobileOpen(false); }}
-                  sx={{ px: 2, py: 1.2, borderTopLeftRadius: 0, borderTopRightRadius: 0 }}
+                  sx={{
+                    px: isTablet ? 0 : 2,
+                    py: 1.5,
+                    justifyContent: isTablet ? 'center' : 'initial',
+                    flexDirection: isTablet ? 'column' : 'row',
+                    minHeight: 48,
+                  }}
                 >
-                  <ListItemIcon sx={{ minWidth: 38 }}>{item.icon}</ListItemIcon>
-                  <ListItemText
-                    primary={item.text}
-                    primaryTypographyProps={{ fontSize: '0.9rem', fontWeight: isSelected ? 600 : 500 }}
-                  />
+                  <ListItemIcon sx={{
+                    minWidth: isTablet ? 0 : 38,
+                    mr: isTablet ? 0 : 1,
+                    justifyContent: 'center',
+                    color: isSelected ? 'primary.main' : 'text.secondary'
+                  }}>
+                    {item.icon}
+                  </ListItemIcon>
+                  {isTablet ? (
+                    <Typography sx={{ fontSize: '0.65rem', fontWeight: isSelected ? 800 : 600, mt: 0.5, color: isSelected ? 'primary.main' : 'text.secondary' }}>
+                      {item.text.split(' ')[0]}
+                    </Typography>
+                  ) : (
+                    <ListItemText
+                      primary={item.text}
+                      primaryTypographyProps={{ fontSize: '0.9rem', fontWeight: isSelected ? 700 : 500 }}
+                    />
+                  )}
                 </ListItemButton>
               </ListItem>
             );
@@ -156,25 +184,38 @@ function MainLayout() {
       </Box>
 
       {/* Bottom Logout */}
-      <Box sx={{ px: 2, py: 2 }}>
-        <Divider sx={{ mb: 2 }} />
+      <Box sx={{ px: isTablet ? 1 : 2, py: 2 }}>
+        <Divider sx={{ mb: 2, opacity: 0.5 }} />
         <ListItemButton
           onClick={handleLogoutClick}
           sx={{
-            borderRadius: 2,
-            px: 2,
-            py: 1.2,
+            borderRadius: 3,
+            px: isTablet ? 0 : 2,
+            py: 1.5,
+            justifyContent: isTablet ? 'center' : 'initial',
+            flexDirection: isTablet ? 'column' : 'row',
             color: 'error.main',
             '&:hover': { bgcolor: '#fef2f2' },
           }}
         >
-          <ListItemIcon sx={{ minWidth: 38, color: 'error.main' }}>
+          <ListItemIcon sx={{
+            minWidth: isTablet ? 0 : 38,
+            mr: isTablet ? 0 : 1,
+            color: 'error.main',
+            justifyContent: 'center'
+          }}>
             <LogoutIcon />
           </ListItemIcon>
-          <ListItemText
-            primary="Logout"
-            primaryTypographyProps={{ fontSize: '0.9rem', fontWeight: 600, color: 'error.main' }}
-          />
+          {isTablet ? (
+            <Typography sx={{ fontSize: '0.65rem', fontWeight: 800, mt: 0.5, color: 'error.main' }}>
+              Exit
+            </Typography>
+          ) : (
+            <ListItemText
+              primary="Logout"
+              primaryTypographyProps={{ fontSize: '0.9rem', fontWeight: 700, color: 'error.main' }}
+            />
+          )}
         </ListItemButton>
       </Box>
     </Box>
@@ -182,15 +223,17 @@ function MainLayout() {
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'background.default' }}>
-      {/* AppBar — mobile only */}
-      {isMobile && (
+      {/* AppBar — mobile/tablet only */}
+      {(isMobile || isTablet) && (
         <AppBar position="fixed" sx={{ zIndex: (t) => t.zIndex.drawer + 1 }}>
-          <Toolbar>
-            <IconButton color="inherit" edge="start" onClick={handleDrawerToggle} sx={{ mr: 1 }}>
+          <Toolbar sx={{ height: 70 }}>
+            <IconButton color="inherit" edge="start" onClick={handleDrawerToggle} sx={{ mr: 2, display: { sm: 'none' } }}>
               <MenuIcon />
             </IconButton>
-            <InventoryIcon sx={{ mr: 1, fontSize: 20 }} />
-            <Typography variant="h6" noWrap sx={{ fontWeight: 700, fontSize: '1rem', letterSpacing: '-0.02em' }}>
+            <Avatar sx={{ bgcolor: 'rgba(255,255,255,0.2)', width: 32, height: 32, mr: 1.5 }}>
+              <InventoryIcon sx={{ fontSize: 18, color: '#fff' }} />
+            </Avatar>
+            <Typography variant="h6" noWrap sx={{ fontWeight: 800, fontSize: '1.1rem', letterSpacing: '-0.02em' }}>
               IT Asset Management
             </Typography>
           </Toolbar>
@@ -198,7 +241,7 @@ function MainLayout() {
       )}
 
       {/* Sidebar */}
-      <Box component="nav" sx={{ width: { md: drawerWidth }, flexShrink: { md: 0 } }}>
+      <Box component="nav" sx={{ width: { sm: actualDrawerWidth }, flexShrink: { sm: 0 } }}>
         {/* Mobile drawer */}
         <Drawer
           variant="temporary"
@@ -206,24 +249,28 @@ function MainLayout() {
           onClose={handleDrawerToggle}
           ModalProps={{ keepMounted: true }}
           sx={{
-            display: { xs: 'block', md: 'none' },
-            '& .MuiDrawer-paper': { width: drawerWidth, bgcolor: 'background.paper' },
+            display: { xs: 'block', sm: 'none' },
+            '& .MuiDrawer-paper': { width: drawerWidth, bgcolor: 'background.paper', border: 'none' },
           }}
         >
           {drawerContent}
         </Drawer>
 
-        {/* Desktop permanent drawer */}
+        {/* Desktop/Tablet permanent drawer */}
         <Drawer
           variant="permanent"
           sx={{
-            display: { xs: 'none', md: 'block' },
+            display: { xs: 'none', sm: 'block' },
             '& .MuiDrawer-paper': {
-              width: drawerWidth,
+              width: actualDrawerWidth,
               bgcolor: 'background.paper',
               border: 'none',
               borderRight: '1px solid',
               borderColor: 'divider',
+              transition: theme.transitions.create('width', {
+                easing: theme.transitions.easing.sharp,
+                duration: theme.transitions.duration.enteringScreen,
+              }),
             },
           }}
           open
@@ -237,11 +284,15 @@ function MainLayout() {
         component="main"
         sx={{
           flexGrow: 1,
-          p: { xs: 2, md: 3 },
-          pt: { xs: 9, md: 3 },
-          pb: { xs: 10, md: 3 },
-          width: { md: `calc(100% - ${drawerWidth}px)` },
+          p: { xs: 2, sm: 3, md: 4 },
+          pt: { xs: 11, sm: 12, md: 4 }, // Add padding top for mobile/tablet AppBar
+          pb: { xs: 12, sm: 3 },
+          width: { sm: `calc(100% - ${actualDrawerWidth}px)` },
           minHeight: '100vh',
+          transition: theme.transitions.create(['width', 'margin'], {
+            easing: theme.transitions.easing.sharp,
+            duration: theme.transitions.duration.enteringScreen,
+          }),
         }}
       >
         <Outlet />

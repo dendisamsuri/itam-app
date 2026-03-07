@@ -4,7 +4,7 @@ import apiLocal from '../apiLocal';
 import {
     Box, Typography, Card, CardContent, Table, TableBody, TableCell, TableContainer,
     TableHead, TableRow, Paper, CircularProgress, Alert, Button, Dialog, DialogTitle,
-    DialogContent, DialogActions, TextField, Snackbar, TablePagination
+    DialogContent, DialogActions, TextField, Snackbar, TablePagination, useTheme, useMediaQuery
 } from '@mui/material';
 import { Add as AddIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
@@ -23,6 +23,9 @@ const getTokenPayload = async () => {
 };
 
 function EmployeeListPage() {
+    const theme = useTheme();
+    const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+    const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'md'));
     const [employees, setEmployees] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -134,41 +137,41 @@ function EmployeeListPage() {
     if (loading) {
         return (
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', minHeight: '60vh' }}>
-                <CircularProgress size={40} thickness={4} />
+                <CircularProgress size={48} thickness={4} />
             </Box>
         );
     }
 
     return (
-        <Box>
-            <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 2 }}>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+        <Box className="fade-in-up">
+            <Box sx={{ mb: 5, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 3 }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                     <Typography variant="h4" sx={{ fontWeight: 800, color: 'text.primary', letterSpacing: '-0.02em' }}>
-                        Employee List
+                        Employee Directory
                     </Typography>
                     <Typography variant="body1" sx={{ color: 'text.secondary', maxWidth: 600 }}>
-                        Manage and view all registered employees within the organization.
+                        A comprehensive list of all staff members and their respective departments.
                     </Typography>
                 </Box>
                 {(isSuperAdmin || isAdmin) && (
-                    <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenAddDialog}>
-                        Add Employee
+                    <Button variant="contained" size="large" startIcon={<AddIcon />} onClick={handleOpenAddDialog}>
+                        Add New Employee
                     </Button>
                 )}
             </Box>
 
             {error && (
-                <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>{error}</Alert>
+                <Alert severity="error" sx={{ mb: 4, borderRadius: 3 }}>{error}</Alert>
             )}
 
-            <Card sx={{ borderRadius: 3, boxShadow: '0 4px 20px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
-                <TableContainer component={Paper} elevation={0}>
+            <Card sx={{ borderRadius: 4, overflow: 'hidden', border: 'none', boxShadow: '0 4px 24px rgba(0,0,0,0.06)' }}>
+                <TableContainer component={Paper} elevation={0} sx={{ borderRadius: 0 }}>
                     <Table sx={{ minWidth: 650 }}>
-                        <TableHead sx={{ bgcolor: 'grey.50' }}>
+                        <TableHead>
                             <TableRow>
-                                <TableCell sx={{ fontWeight: 600, color: 'text.secondary', py: 2 }}>Name</TableCell>
-                                <TableCell sx={{ fontWeight: 600, color: 'text.secondary', py: 2 }}>Department</TableCell>
-                                <TableCell sx={{ fontWeight: 600, color: 'text.secondary', py: 2 }}>Email</TableCell>
+                                <TableCell>Name</TableCell>
+                                <TableCell>Department</TableCell>
+                                <TableCell>Email Address</TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>

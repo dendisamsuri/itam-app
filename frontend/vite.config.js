@@ -5,7 +5,16 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   optimizeDeps: {
-    include: ['@mui/material', '@mui/icons-material', 'html5-qrcode', 'axios', 'react-router-dom', '@emotion/react', '@emotion/styled']
+    include: [
+      '@mui/material',
+      '@mui/icons-material',
+      'html5-qrcode',
+      'axios',
+      'react-router-dom',
+      '@emotion/react',
+      '@emotion/styled',
+      '@supabase/supabase-js'
+    ]
   },
   server: {
     host: true,

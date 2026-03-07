@@ -42,7 +42,8 @@ function DashboardPage() {
   const [error, setError] = useState('');
   const navigate = useNavigate();
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'md'));
 
   // Autocomplete
   const [employeeOptions, setEmployeeOptions] = useState([]);
@@ -312,12 +313,12 @@ function DashboardPage() {
             {filteredAssets.length} assets found
           </Typography>
         </Box>
-        {(!isMobile && (isSuperAdmin || isAdmin)) && (
+        {(isSuperAdmin || isAdmin) && (
           <Button
             variant="contained"
             startIcon={<AddIcon />}
             onClick={() => navigate('/add')}
-            sx={{ whiteSpace: 'nowrap' }}
+            sx={{ whiteSpace: 'nowrap', display: { xs: 'none', sm: 'inline-flex' } }}
           >
             Add Asset
           </Button>
@@ -325,12 +326,12 @@ function DashboardPage() {
       </Box>
 
       {/* Search Bar & Filters */}
-      <Paper sx={{ p: 2, mb: 3 }}>
-        <Grid container spacing={2} alignItems="center">
-          <Grid size={{ xs: 12, md: 5 }}>
+      <Paper sx={{ p: { xs: 2.5, sm: 3 }, mb: 4, borderRadius: 4 }}>
+        <Grid container spacing={2.5} alignItems="center">
+          <Grid size={{ xs: 12, md: 5, lg: 4 }}>
             <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
               <TextField
-                placeholder="Search name, brand, or serial number..."
+                placeholder="Search name, brand, SN..."
                 fullWidth size="small"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -347,14 +348,14 @@ function DashboardPage() {
                 color={isScanning ? 'error' : 'primary'}
                 startIcon={<QrCodeScannerIcon />}
                 onClick={() => setIsScanning(!isScanning)}
-                sx={{ whiteSpace: 'nowrap', flexShrink: 0 }}
+                sx={{ whiteSpace: 'nowrap', flexShrink: 0, height: 40 }}
                 size="small"
               >
                 {isScanning ? 'Cancel' : 'Scan'}
               </Button>
             </Box>
           </Grid>
-          <Grid size={{ xs: 12, sm: 6, md: 3.5 }}>
+          <Grid size={{ xs: 12, sm: 6, md: 3.5, lg: 4 }}>
             <FormControl fullWidth size="small">
               <InputLabel>Status</InputLabel>
               <Select
@@ -370,7 +371,7 @@ function DashboardPage() {
               </Select>
             </FormControl>
           </Grid>
-          <Grid size={{ xs: 12, sm: 6, md: 3.5 }}>
+          <Grid size={{ xs: 12, sm: 6, md: 3.5, lg: 4 }}>
             <TextField
               placeholder="Filter by Assigned User..."
               fullWidth size="small"
@@ -393,101 +394,99 @@ function DashboardPage() {
         )}
       </Paper>
 
-      {/* Mobile: Cards */}
-      {isMobile ? (
-        <Stack spacing={1.5}>
+      {/* Mobile/Tablet: Cards */}
+      {isMobile || isTablet ? (
+        <Grid container spacing={2.5}>
           {loading ? (
-            [...Array(4)].map((_, i) => (
-              <Card key={i}>
-                <CardContent>
-                  <Skeleton variant="text" width="60%" height={28} />
-                  <Skeleton variant="text" width="40%" />
-                  <Skeleton variant="text" width="30%" />
-                </CardContent>
-              </Card>
+            [...Array(6)].map((_, i) => (
+              <Grid size={{ xs: 12, sm: 6 }} key={i}>
+                <Card sx={{ p: 1 }}>
+                  <CardContent>
+                    <Skeleton variant="text" width="60%" height={32} />
+                    <Skeleton variant="text" width="40%" height={24} />
+                    <Skeleton variant="text" width="30%" height={24} />
+                  </CardContent>
+                </Card>
+              </Grid>
             ))
           ) : filteredAssets.length === 0 ? (
-            <Paper sx={{ py: 6, textAlign: 'center' }}>
-              <NoResultsIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
-              <Typography color="text.secondary">No assets found</Typography>
-            </Paper>
+            <Grid size={12}>
+              <Paper sx={{ py: 10, textAlign: 'center', borderRadius: 4 }}>
+                <NoResultsIcon sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
+                <Typography color="text.secondary" variant="h6">No assets found</Typography>
+                <Typography variant="body2" color="text.disabled">Try adjusting your filters or search query</Typography>
+              </Paper>
+            </Grid>
           ) : (
             paginatedAssets.map((asset) => (
-              <Card key={asset.id} sx={{ borderRadius: 3 }}>
-                <CardContent sx={{ pb: 1 }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <Box sx={{ flex: 1, mr: 1 }}>
-                      <Typography variant="subtitle1" fontWeight={700} lineHeight={1.3}>
-                        {asset.name} {asset.brand}
-                      </Typography>
+              <Grid size={{ xs: 12, sm: 6 }} key={asset.id}>
+                <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                  <CardContent sx={{ flexGrow: 1, p: 3 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                      <Box sx={{ flex: 1, mr: 1 }}>
+                        <Typography variant="h6" fontWeight={800} lineHeight={1.2} color="text.primary">
+                          {asset.name}
+                        </Typography>
+                        <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 0.5 }}>
+                          {asset.brand}
+                        </Typography>
+                      </Box>
+                      {getStatusChip(asset.status)}
                     </Box>
-                    {getStatusChip(asset.status)}
-                  </Box>
-                  <Box sx={{ mt: 1.5, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                      <TagIcon sx={{ fontSize: 15, color: 'text.disabled' }} />
-                      <Typography variant="caption" color="text.secondary" fontFamily="monospace">
-                        {asset.serial_number}
-                      </Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                      <PersonIcon sx={{ fontSize: 15, color: 'text.disabled' }} />
-                      <Typography variant="caption" color="text.secondary">
-                        {asset.assigned_to || 'No User Assigned'}
-                      </Typography>
-                    </Box>
-                  </Box>
-                </CardContent>
-                <Divider />
-                <CardActions sx={{ px: 2, py: 1, justifyContent: 'flex-end' }}>
-                  {(isSuperAdmin || isAdmin) && (
-                    <>
-                      <Button
-                        size="small" variant="outlined"
-                        onClick={() => handleOpenDialog(asset, 'HANDOVER')}
-                        sx={{ fontSize: '0.75rem' }}
-                      >
-                        Handover
-                      </Button>
-                      <Button
-                        size="small" variant="outlined"
-                        disabled={asset.status === 'Ready'}
-                        onClick={() => handleOpenDialog(asset, 'RETURN')}
-                        sx={{ fontSize: '0.75rem' }}
-                      >
-                        Return
-                      </Button>
-                    </>
-                  )}
-                  <Button
-                    size="small"
-                    onClick={() => navigate(`/assets/${asset.id}/details`)}
-                    sx={{ fontSize: '0.75rem' }}
-                  >
-                    Details
-                  </Button>
-                  <Button
-                    size="small"
-                    onClick={() => navigate(`/assets/${asset.id}/history`)}
-                    sx={{ fontSize: '0.75rem' }}
-                  >
-                    History
-                  </Button>
-                  <Button
-                    size="small"
-                    onClick={() => navigate(`/assets/${asset.id}/repairs`)}
-                    sx={{ fontSize: '0.75rem' }}
-                  >
-                    Repairs
-                  </Button>
-                </CardActions>
-              </Card>
+                    <Stack spacing={1.5} sx={{ mt: 2 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                        <Box sx={{ bgcolor: 'grey.100', p: 0.75, borderRadius: 1, display: 'flex' }}>
+                          <TagIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                        </Box>
+                        <Typography variant="body2" color="text.primary" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
+                          {asset.serial_number}
+                        </Typography>
+                      </Box>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                        <Box sx={{ bgcolor: 'grey.100', p: 0.75, borderRadius: 1, display: 'flex' }}>
+                          <PersonIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                        </Box>
+                        <Typography variant="body2" color="text.primary" fontWeight={500}>
+                          {asset.assigned_to || 'Unassigned'}
+                        </Typography>
+                      </Box>
+                    </Stack>
+                  </CardContent>
+                  <Divider />
+                  <CardActions sx={{ px: 2, py: 1.5, gap: 1, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                    {(isSuperAdmin || isAdmin) && (
+                      <>
+                        <Button
+                          size="small" variant="outlined"
+                          onClick={() => handleOpenDialog(asset, 'HANDOVER')}
+                        >
+                          Handover
+                        </Button>
+                        <Button
+                          size="small" variant="outlined"
+                          disabled={asset.status === 'Ready'}
+                          onClick={() => handleOpenDialog(asset, 'RETURN')}
+                        >
+                          Return
+                        </Button>
+                      </>
+                    )}
+                    <Button
+                      size="small"
+                      onClick={() => navigate(`/assets/${asset.id}/details`)}
+                      sx={{ ml: 'auto' }}
+                    >
+                      Details
+                    </Button>
+                  </CardActions>
+                </Card>
+              </Grid>
             ))
           )}
-        </Stack>
+        </Grid>
       ) : (
         /* Desktop: Table */
-        <Paper>
+        <Paper sx={{ overflow: 'hidden' }}>
           <TableContainer>
             <Table>
               <TableHead>
