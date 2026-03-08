@@ -4,23 +4,22 @@ import apiLocal from '../apiLocal';
 import {
     Box, Typography, Card, CardContent, Table, TableBody, TableCell, TableContainer,
     TableHead, TableRow, Paper, CircularProgress, Alert, Button, Dialog, DialogTitle,
-    DialogContent, DialogActions, TextField, Snackbar, TablePagination, useTheme, useMediaQuery
+    DialogContent, DialogActions, TextField, Snackbar, TablePagination, useTheme, useMediaQuery,
+    Grid, Stack, Avatar, InputAdornment, IconButton
 } from '@mui/material';
-import { Add as AddIcon } from '@mui/icons-material';
+import {
+    Add as AddIcon,
+    Person as PersonIcon,
+    Business as BusinessIcon,
+    Email as EmailIcon,
+    Edit as EditIcon,
+    Search as SearchIcon,
+    SaveOutlined as SaveIcon
+} from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
+import { getUserPayload } from '../utils/auth.js';
 
-const getTokenPayload = async () => {
-    try {
-        const { data: { user } } = await supabase.auth.getUser();
-        return user ? {
-            id: user.id,
-            role: user.user_metadata?.role || 'user',
-            name: user.user_metadata?.name || 'User'
-        } : null;
-    } catch (e) {
-        return null;
-    }
-};
+
 
 function EmployeeListPage() {
     const theme = useTheme();
@@ -36,13 +35,18 @@ function EmployeeListPage() {
     const isAdmin = user?.role === 'admin';
 
     useEffect(() => {
-        getTokenPayload().then(u => setUser(u));
+        getUserPayload().then(u => setUser(u));
     }, []);
 
     const [openAddDialog, setOpenAddDialog] = useState(false);
     const [addFormData, setAddFormData] = useState({ name: '', department: '', email: '' });
     const [addError, setAddError] = useState('');
     const [snackbar, setSnackbar] = useState({ open: false, message: '' });
+    const [searchQuery, setSearchQuery] = useState('');
+
+    const [openEditDialog, setOpenEditDialog] = useState(false);
+    const [editFormData, setEditFormData] = useState({ id: '', name: '', department: '', email: '' });
+    const [editError, setEditError] = useState('');
 
     // Pagination
     const [page, setPage] = useState(0);
@@ -91,6 +95,53 @@ function EmployeeListPage() {
         }
     };
 
+    const handleOpenEditDialog = (employee) => {
+        setEditFormData({
+            id: employee.id,
+            name: employee.name,
+            department: employee.department || '',
+            email: employee.email || ''
+        });
+        setEditError('');
+        setOpenEditDialog(true);
+    };
+
+    const handleEditSubmit = async () => {
+        if (!editFormData.name) {
+            setEditError('Name is required');
+            return;
+        }
+        try {
+            if (import.meta.env.VITE_APP_ENV === 'local') {
+                await apiLocal.put(`/employees/${editFormData.id}`, {
+                    name: editFormData.name,
+                    department: editFormData.department || null,
+                    email: editFormData.email || null
+                });
+            } else {
+                const { error } = await supabase
+                    .from('employees')
+                    .update({
+                        name: editFormData.name,
+                        department: editFormData.department || null,
+                        email: editFormData.email || null
+                    })
+                    .eq('id', editFormData.id);
+                if (error) throw error;
+            }
+
+            setSnackbar({ open: true, message: 'Employee updated successfully!' });
+            setOpenEditDialog(false);
+            fetchEmployees();
+        } catch (err) {
+            if (err.response && err.response.data && err.response.data.error) {
+                setEditError(err.response.data.error);
+            } else {
+                setEditError(err.message || 'Failed to update employee');
+            }
+        }
+    };
+
     const fetchEmployees = useCallback(async () => {
         try {
             if (import.meta.env.VITE_APP_ENV === 'local') {
@@ -132,7 +183,13 @@ function EmployeeListPage() {
         setPage(0);
     };
 
-    const paginatedEmployees = employees.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+    const filteredEmployees = employees.filter(emp =>
+        emp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (emp.email && emp.email.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (emp.department && emp.department.toLowerCase().includes(searchQuery.toLowerCase()))
+    );
+
+    const paginatedEmployees = filteredEmployees.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
 
     if (loading) {
         return (
@@ -144,68 +201,188 @@ function EmployeeListPage() {
 
     return (
         <Box className="fade-in-up">
-            <Box sx={{ mb: 5, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 3 }}>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                    <Typography variant="h4" sx={{ fontWeight: 800, color: 'text.primary', letterSpacing: '-0.02em' }}>
+            <Box sx={{ mb: { xs: 3, md: 5 }, display: 'flex', justifyContent: 'space-between', alignItems: isMobile ? 'stretch' : 'flex-start', flexDirection: isMobile ? 'column' : 'row', gap: 3 }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                    <Typography variant={isMobile ? 'h5' : 'h4'} sx={{ fontWeight: 800, color: 'text.primary', letterSpacing: '-0.02em' }}>
                         Employee Directory
                     </Typography>
-                    <Typography variant="body1" sx={{ color: 'text.secondary', maxWidth: 600 }}>
-                        A comprehensive list of all staff members and their respective departments.
+                    <Typography variant="body2" sx={{ color: 'text.secondary', maxWidth: 600 }}>
+                        {employees.length} staff members in the registry.
                     </Typography>
                 </Box>
                 {(isSuperAdmin || isAdmin) && (
-                    <Button variant="contained" size="large" startIcon={<AddIcon />} onClick={handleOpenAddDialog}>
-                        Add New Employee
+                    <Button
+                        variant="contained"
+                        size={isMobile ? 'medium' : 'large'}
+                        startIcon={<AddIcon />}
+                        onClick={handleOpenAddDialog}
+                        sx={{
+                            borderRadius: '12px',
+                            px: { xs: 2.5, sm: 4 },
+                            py: { xs: 1, sm: 1.5 },
+                            boxShadow: '0 8px 20px -4px rgba(99, 102, 241, 0.4)'
+                        }}
+                    >
+                        Add Employee
                     </Button>
                 )}
+            </Box>
+
+            <Box sx={{ mb: 4 }}>
+                <TextField
+                    fullWidth
+                    variant="outlined"
+                    placeholder="Search by name, email, or department..."
+                    value={searchQuery}
+                    onChange={(e) => { setSearchQuery(e.target.value); setPage(0); }}
+                    InputProps={{
+                        startAdornment: (
+                            <InputAdornment position="start">
+                                <SearchIcon color="action" />
+                            </InputAdornment>
+                        ),
+                        sx: { borderRadius: '12px', bgcolor: 'background.paper' }
+                    }}
+                />
             </Box>
 
             {error && (
                 <Alert severity="error" sx={{ mb: 4, borderRadius: 3 }}>{error}</Alert>
             )}
 
-            <Card sx={{ borderRadius: 4, overflow: 'hidden', border: 'none', boxShadow: '0 4px 24px rgba(0,0,0,0.06)' }}>
-                <TableContainer component={Paper} elevation={0} sx={{ borderRadius: 0 }}>
-                    <Table sx={{ minWidth: 650 }}>
-                        <TableHead>
-                            <TableRow>
-                                <TableCell>Name</TableCell>
-                                <TableCell>Department</TableCell>
-                                <TableCell>Email Address</TableCell>
-                            </TableRow>
-                        </TableHead>
-                        <TableBody>
-                            {employees.length === 0 ? (
+            {isMobile || isTablet ? (
+                /* Mobile/Tablet: Card Layout */
+                <Grid container spacing={2}>
+                    {employees.length === 0 ? (
+                        <Grid size={12}>
+                            <Paper sx={{ py: 10, textAlign: 'center', borderRadius: 4 }}>
+                                <Typography color="text.secondary">No employees found.</Typography>
+                            </Paper>
+                        </Grid>
+                    ) : (
+                        paginatedEmployees.map((employee) => (
+                            <Grid size={{ xs: 12, sm: 6 }} key={employee.id}>
+                                <Card sx={{
+                                    height: '100%',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    border: 'none',
+                                    boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
+                                    '&:hover': { transform: 'translateY(-2px)', boxShadow: '0 12px 24px rgba(0,0,0,0.06)' }
+                                }}>
+                                    <CardContent sx={{ p: 2.5 }}>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                                            <Avatar sx={{
+                                                width: 42,
+                                                height: 42,
+                                                bgcolor: 'primary.lighter',
+                                                color: 'primary.main',
+                                                fontWeight: 700,
+                                                mr: 2
+                                            }}>
+                                                {employee.name ? employee.name[0] : 'U'}
+                                            </Avatar>
+                                            <Box>
+                                                <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                                                    {employee.name || 'Unknown'}
+                                                </Typography>
+                                                <Typography variant="caption" color="text.secondary">
+                                                    ID: {employee.id ? String(employee.id).substring(0, 8) : 'N/A'}...
+                                                </Typography>
+                                            </Box>
+                                        </Box>
+                                        <Stack spacing={1.5}>
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                                <BusinessIcon sx={{ fontSize: 18, color: 'text.disabled' }} />
+                                                <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                                    {employee.department || 'No Department'}
+                                                </Typography>
+                                            </Box>
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                                <EmailIcon sx={{ fontSize: 18, color: 'text.disabled' }} />
+                                                <Typography variant="body2" sx={{ color: 'text.secondary', wordBreak: 'break-all' }}>
+                                                    {employee.email || 'No Email'}
+                                                </Typography>
+                                            </Box>
+                                        </Stack>
+                                        {(isSuperAdmin || isAdmin) && (
+                                            <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid', borderColor: 'divider', display: 'flex', justifyContent: 'flex-end' }}>
+                                                <Button
+                                                    size="small"
+                                                    startIcon={<EditIcon />}
+                                                    onClick={() => handleOpenEditDialog(employee)}
+                                                    sx={{ borderRadius: '8px' }}
+                                                >
+                                                    Edit
+                                                </Button>
+                                            </Box>
+                                        )}
+                                    </CardContent>
+                                </Card>
+                            </Grid>
+                        ))
+                    )}
+                </Grid>
+            ) : (
+                /* Desktop: Table Layout */
+                <Card sx={{ borderRadius: 4, overflow: 'hidden', border: 'none', boxShadow: '0 4px 24px rgba(0,0,0,0.06)' }}>
+                    <TableContainer component={Paper} elevation={0} sx={{ borderRadius: 0 }}>
+                        <Table sx={{ minWidth: 650 }}>
+                            <TableHead>
                                 <TableRow>
-                                    <TableCell colSpan={3} align="center" sx={{ py: 6, color: 'text.secondary' }}>
-                                        No employees found. Employees are added automatically when an asset is assigned.
-                                    </TableCell>
+                                    <TableCell>Name</TableCell>
+                                    <TableCell>Department</TableCell>
+                                    <TableCell>Email Address</TableCell>
+                                    {(isSuperAdmin || isAdmin) && <TableCell align="right">Actions</TableCell>}
                                 </TableRow>
-                            ) : (
-                                paginatedEmployees.map((employee) => (
-                                    <TableRow key={employee.id} hover sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
-                                        <TableCell sx={{ py: 2, fontWeight: 500 }}>{employee.name}</TableCell>
-                                        <TableCell sx={{ py: 2 }}>{employee.department || '-'}</TableCell>
-                                        <TableCell sx={{ py: 2 }}>{employee.email || '-'}</TableCell>
+                            </TableHead>
+                            <TableBody>
+                                {filteredEmployees.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={isSuperAdmin || isAdmin ? 4 : 3} align="center" sx={{ py: 6, color: 'text.secondary' }}>
+                                            No employees found.
+                                        </TableCell>
                                     </TableRow>
-                                ))
-                            )}
-                        </TableBody>
-                    </Table>
-                </TableContainer>
+                                ) : (
+                                    paginatedEmployees.map((employee) => (
+                                        <TableRow key={employee.id} hover sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
+                                            <TableCell sx={{ py: 2, fontWeight: 600 }}>
+                                                <Stack direction="row" spacing={2} alignItems="center">
+                                                    <Avatar sx={{ width: 32, height: 32, fontSize: '0.875rem', bgcolor: 'primary.lighter', color: 'primary.main' }}>
+                                                        {employee.name[0]}
+                                                    </Avatar>
+                                                    {employee.name}
+                                                </Stack>
+                                            </TableCell>
+                                            <TableCell sx={{ py: 2 }}>{employee.department || '-'}</TableCell>
+                                            <TableCell sx={{ py: 2 }}>{employee.email || '-'}</TableCell>
+                                            {(isSuperAdmin || isAdmin) && (
+                                                <TableCell align="right" sx={{ py: 2 }}>
+                                                    <IconButton size="small" onClick={() => handleOpenEditDialog(employee)} color="primary">
+                                                        <EditIcon fontSize="small" />
+                                                    </IconButton>
+                                                </TableCell>
+                                            )}
+                                        </TableRow>
+                                    ))
+                                )}
+                            </TableBody>
+                        </Table>
+                    </TableContainer>
+                </Card>
+            )}
 
-                {employees.length > 0 && (
-                    <TablePagination
-                        component="div"
-                        count={employees.length}
-                        page={page}
-                        onPageChange={handleChangePage}
-                        rowsPerPage={rowsPerPage}
-                        onRowsPerPageChange={handleChangeRowsPerPage}
-                        rowsPerPageOptions={[5, 10, 25, 50]}
-                    />
-                )}
-            </Card>
+            {filteredEmployees.length > 0 && (
+                <TablePagination
+                    component="div"
+                    count={filteredEmployees.length}
+                    page={page}
+                    onPageChange={handleChangePage}
+                    rowsPerPage={rowsPerPage}
+                    onRowsPerPageChange={handleChangeRowsPerPage}
+                    rowsPerPageOptions={[5, 10, 25, 50]}
+                />
+            )}
 
             {/* Add Employee Dialog */}
             <Dialog open={openAddDialog} onClose={() => setOpenAddDialog(false)} fullWidth maxWidth="sm">
@@ -232,6 +409,35 @@ function EmployeeListPage() {
                     <Button onClick={() => setOpenAddDialog(false)} variant="outlined">Cancel</Button>
                     <Button onClick={handleAddSubmit} variant="contained" startIcon={<AddIcon />}>
                         Add Employee
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Edit Employee Dialog */}
+            <Dialog open={openEditDialog} onClose={() => setOpenEditDialog(false)} fullWidth maxWidth="sm">
+                <DialogTitle sx={{ fontWeight: 700 }}>Edit Employee</DialogTitle>
+                <DialogContent>
+                    {editError && <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>{editError}</Alert>}
+                    <TextField
+                        autoFocus fullWidth label="Name *" sx={{ mb: 2, mt: 1 }}
+                        value={editFormData.name}
+                        onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                    />
+                    <TextField
+                        fullWidth label="Department" sx={{ mb: 2 }}
+                        value={editFormData.department}
+                        onChange={(e) => setEditFormData({ ...editFormData, department: e.target.value })}
+                    />
+                    <TextField
+                        fullWidth label="Email" type="email"
+                        value={editFormData.email}
+                        onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
+                    />
+                </DialogContent>
+                <DialogActions sx={{ px: 3, pb: 2 }}>
+                    <Button onClick={() => setOpenEditDialog(false)} variant="outlined">Cancel</Button>
+                    <Button onClick={handleEditSubmit} variant="contained">
+                        Save Changes
                     </Button>
                 </DialogActions>
             </Dialog>

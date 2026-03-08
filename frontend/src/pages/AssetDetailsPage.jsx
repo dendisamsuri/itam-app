@@ -4,30 +4,19 @@ import { supabase } from '../supabaseClient';
 import apiLocal from '../apiLocal';
 import {
     Paper, Typography, TextField, Button, Box, Grid, Alert,
-    Divider, InputAdornment, Skeleton, Snackbar, IconButton
+    Divider, InputAdornment, Skeleton, Snackbar, IconButton,
+    useTheme, useMediaQuery, Stack, Chip
 } from '@mui/material';
 import {
-    Save as SaveIcon,
+    SaveOutlined as SaveIcon,
     Inventory2Outlined as InventoryIcon,
-    QrCodeScanner as BarcodeIcon,
+    QrCode2 as BarcodeIcon,
     ArrowBack as ArrowBackIcon,
-    Edit as EditIcon,
+    EditOutlined as EditIcon,
     Close as CloseIcon
 } from '@mui/icons-material';
 import Barcode from 'react-barcode';
-
-const getTokenPayload = async () => {
-    try {
-        const { data: { user } } = await supabase.auth.getUser();
-        return user ? {
-            id: user.id,
-            role: user.user_metadata?.role || 'user',
-            name: user.user_metadata?.name || 'User'
-        } : null;
-    } catch (e) {
-        return null;
-    }
-};
+import { getUserPayload } from '../utils/auth.js';
 
 const fields = [
     { name: 'serial_number', label: 'Serial Number (SN)', required: true, xs: 12 },
@@ -62,7 +51,7 @@ function AssetDetailsPage() {
     const isAdmin = user?.role === 'admin';
 
     useEffect(() => {
-        getTokenPayload().then(u => setUser(u));
+        getUserPayload().then(u => setUser(u));
     }, []);
 
     const fetchAssetDetails = useCallback(async () => {
@@ -178,10 +167,10 @@ function AssetDetailsPage() {
                     <Skeleton variant="text" width="60%" height={24} />
                 </Box>
                 <Grid container spacing={4}>
-                    <Grid size={{ xs: 12, md: 7 }}>
+                    <Grid size={{ xs: 12, lg: 7 }}>
                         <Skeleton variant="rectangular" height={500} sx={{ borderRadius: 6 }} />
                     </Grid>
-                    <Grid size={{ xs: 12, md: 5 }}>
+                    <Grid size={{ xs: 12, lg: 5 }}>
                         <Skeleton variant="rectangular" height={500} sx={{ borderRadius: 6 }} />
                     </Grid>
                 </Grid>
@@ -192,80 +181,116 @@ function AssetDetailsPage() {
     return (
         <Box className="fade-in-up">
             {/* Page Header */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2.5, mb: 4, flexWrap: 'wrap' }}>
-                <IconButton
-                    onClick={() => navigate('/')}
-                    sx={{
-                        bgcolor: 'background.paper',
-                        border: '1px solid',
-                        borderColor: 'divider',
-                        flexShrink: 0,
-                        width: 48,
-                        height: 48
-                    }}
-                >
-                    <ArrowBackIcon />
-                </IconButton>
-                <Box sx={{ flex: 1 }}>
-                    <Typography variant="h4" sx={{ fontWeight: 800, letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: { xs: 'flex-start', sm: 'center' }, gap: { xs: 1.5, sm: 2.5 }, mb: 4, flexWrap: 'wrap', flexDirection: { xs: 'column', sm: 'row' } }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: { xs: '100%', sm: 'auto' } }}>
+                    <IconButton
+                        onClick={() => navigate('/')}
+                        sx={{
+                            bgcolor: 'background.paper',
+                            border: '1px solid',
+                            borderColor: 'divider',
+                            flexShrink: 0,
+                            width: { xs: 40, sm: 48 },
+                            height: { xs: 40, sm: 48 },
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
+                        }}
+                    >
+                        <ArrowBackIcon fontSize={isMobile ? 'small' : 'medium'} />
+                    </IconButton>
+                    <Typography variant={isMobile ? 'h5' : 'h4'} sx={{ fontWeight: 900, letterSpacing: '-0.03em' }}>
                         Asset Details
-                        {(isSuperAdmin || isAdmin) && !isEditing && (
-                            <Button variant="contained" startIcon={<EditIcon />} onClick={() => setIsEditing(true)}>
-                                Edit
-                            </Button>
-                        )}
-                        {isEditing && (
-                            <Button color="error" variant="outlined" startIcon={<CloseIcon />} onClick={() => { setIsEditing(false); fetchAssetDetails(); }}>
-                                Cancel
-                            </Button>
-                        )}
                     </Typography>
-                    <Typography variant="body1" color="text.secondary" sx={{ mt: 0.5 }}>
-                        Manage information for asset <strong>{formData.serial_number}</strong>
-                    </Typography>
+                </Box>
+
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, ml: { xs: 0, sm: 'auto' }, width: { xs: '100%', sm: 'auto' }, justifyContent: { xs: 'flex-start', sm: 'flex-end' } }}>
+                    {(isSuperAdmin || isAdmin) && !isEditing && (
+                        <Button
+                            variant="contained"
+                            startIcon={<EditIcon />}
+                            onClick={() => setIsEditing(true)}
+                            sx={{ borderRadius: '12px', px: { xs: 2, sm: 3 } }}
+                            size={isMobile ? 'small' : 'medium'}
+                        >
+                            Edit
+                        </Button>
+                    )}
+                    {isEditing && (
+                        <Button
+                            color="error"
+                            variant="outlined"
+                            startIcon={<CloseIcon />}
+                            onClick={() => { setIsEditing(false); fetchAssetDetails(); }}
+                            sx={{ borderRadius: '12px', px: { xs: 2, sm: 3 } }}
+                            size={isMobile ? 'small' : 'medium'}
+                        >
+                            Cancel
+                        </Button>
+                    )}
+                    <Chip
+                        label={formData.serial_number}
+                        size="medium"
+                        variant="outlined"
+                        sx={{
+                            fontWeight: 700,
+                            borderColor: 'primary.light',
+                            bgcolor: 'primary.lighter',
+                            display: { xs: 'none', md: 'inline-flex' }
+                        }}
+                    />
                 </Box>
             </Box>
 
-            {error && <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>{error}</Alert>}
+            {error && <Alert severity="error" sx={{ mb: 3, borderRadius: '16px', boxShadow: '0 4px 15px rgba(0,0,0,0.05)' }}>{error}</Alert>}
 
             <Grid container spacing={4}>
                 {/* Form Card */}
                 <Grid size={{ xs: 12, lg: 7 }}>
-                    <Paper sx={{ p: { xs: 3, sm: 4 }, borderRadius: 6 }}>
+                    <Paper className="glassmorphism" sx={{ p: { xs: 3, sm: 4 }, borderRadius: '24px' }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 4 }}>
                             <Box sx={{
-                                width: 48, height: 48, borderRadius: 3,
-                                background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                width: 44, height: 44, borderRadius: '14px',
+                                background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                boxShadow: '0 8px 16px -4px rgba(99, 102, 241, 0.4)'
                             }}>
-                                <InventoryIcon sx={{ color: '#fff', fontSize: 24 }} />
+                                <InventoryIcon sx={{ color: '#fff', fontSize: 22 }} />
                             </Box>
-                            <Typography variant="h5" fontWeight={800}>
+                            <Typography variant="h5" fontWeight={800} letterSpacing="-0.01em">
                                 Asset Information
                             </Typography>
                         </Box>
-                        <Divider sx={{ mb: 4 }} />
+
+                        <Divider sx={{ mb: 4, opacity: 0.6 }} />
 
                         <Box component="form" onSubmit={handleSave} noValidate>
                             <Grid container spacing={3}>
                                 {fields.map((f) => (
                                     <Grid size={{ xs: f.xs, sm: f.sm }} key={f.name}>
+                                        <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700, mb: 1, display: 'block', ml: 0.5 }}>
+                                            {f.label}
+                                        </Typography>
                                         <TextField
                                             required={f.required}
                                             fullWidth
                                             id={f.name}
-                                            label={f.label}
                                             name={f.name}
                                             type={f.type || 'text'}
                                             value={formData[f.name]}
                                             onChange={handleInputChange}
                                             disabled={!isEditing}
-                                            InputLabelProps={f.type === 'date' ? { shrink: true } : undefined}
-                                            sx={{ '& .MuiInputBase-root': { height: 56 } }}
+                                            placeholder={`Enter ${f.label.toLowerCase()}...`}
+                                            InputLabelProps={{ shrink: true }}
+                                            sx={{
+                                                '& .MuiInputBase-root': {
+                                                    height: 54,
+                                                    borderRadius: '12px',
+                                                    bgcolor: isEditing ? 'transparent' : 'rgba(0,0,0,0.02)'
+                                                }
+                                            }}
                                             InputProps={{
                                                 startAdornment: f.name === 'serial_number' && (
                                                     <InputAdornment position="start">
-                                                        <BarcodeIcon color="primary" />
+                                                        <BarcodeIcon color="primary" sx={{ opacity: 0.7 }} />
                                                     </InputAdornment>
                                                 ),
                                             }}
@@ -273,84 +298,105 @@ function AssetDetailsPage() {
                                     </Grid>
                                 ))}
                                 <Grid size={12}>
+                                    <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700, mb: 1, display: 'block', ml: 0.5 }}>
+                                        Specifications (e.g., Core i5, 16GB RAM)
+                                    </Typography>
                                     <TextField
                                         fullWidth multiline rows={4}
-                                        id="specs" label="Specifications (e.g., Core i5, 16GB RAM)"
+                                        id="specs"
                                         name="specs" value={formData.specs} onChange={handleInputChange}
                                         disabled={!isEditing}
+                                        placeholder="Add detailed specifications here..."
+                                        sx={{
+                                            '& .MuiInputBase-root': {
+                                                borderRadius: '16px',
+                                                bgcolor: isEditing ? 'transparent' : 'rgba(0,0,0,0.02)'
+                                            }
+                                        }}
                                     />
                                 </Grid>
                             </Grid>
 
                             {isEditing && (
-                                <Button
-                                    type="submit" fullWidth variant="contained" size="large"
-                                    disabled={saving}
-                                    startIcon={<SaveIcon />}
-                                    sx={{ mt: 5, py: 2, fontSize: '1.1rem' }}
-                                >
-                                    {saving ? 'Updating Asset...' : 'Save Configuration'}
-                                </Button>
+                                <Stack direction="row" spacing={2} sx={{ mt: 5 }}>
+                                    <Button
+                                        type="submit" fullWidth variant="contained" size="large"
+                                        disabled={saving}
+                                        startIcon={<SaveIcon />}
+                                        sx={{ py: 1.8, fontSize: '1rem', fontWeight: 700, borderRadius: '14px' }}
+                                    >
+                                        {saving ? 'Updating...' : 'Save Changes'}
+                                    </Button>
+                                </Stack>
                             )}
                         </Box>
                     </Paper>
                 </Grid>
 
-                {/* Barcode & Photo Preview Card */}
+                {/* Sidebar Cards */}
                 <Grid size={{ xs: 12, lg: 5 }}>
-                    <Paper sx={{ p: { xs: 3, sm: 4 }, mb: 4, borderRadius: 6 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 4 }}>
-                            <Box sx={{
-                                width: 48, height: 48, borderRadius: 3,
-                                background: 'linear-gradient(135deg, #0d9488 0%, #0891b2 100%)',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center'
-                            }}>
-                                <BarcodeIcon sx={{ color: '#fff', fontSize: 24 }} />
-                            </Box>
-                            <Typography variant="h5" fontWeight={800}>Barcode Tag</Typography>
-                        </Box>
-                        <Divider sx={{ mb: 4 }} />
-
-                        <Box sx={{
-                            display: 'flex', flexDirection: 'column', alignItems: 'center',
-                            justifyContent: 'center', py: 6,
-                            bgcolor: '#f8fafc', borderRadius: 4, border: '2px dashed #e2e8f0',
-                        }}>
-                            {formData.serial_number ? (
-                                <>
-                                    <Barcode value={formData.serial_number} width={2} height={100} fontSize={16} background="#f8fafc" />
-                                    <Typography variant="caption" sx={{ mt: 2, color: 'text.disabled', fontWeight: 700, letterSpacing: '0.1em' }}>
-                                        ASSET IDENTIFICATION TAG
-                                    </Typography>
-                                </>
-                            ) : (
-                                <Typography color="text.secondary">Waiting for serial number...</Typography>
-                            )}
-                        </Box>
-                    </Paper>
-
-                    {formData.photo_url && (
-                        <Paper sx={{ p: { xs: 3, sm: 4 }, borderRadius: 6 }}>
+                    <Stack spacing={4}>
+                        <Paper className="glassmorphism" sx={{ p: { xs: 3, sm: 4 }, borderRadius: '24px' }}>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 4 }}>
-                                <Typography variant="h5" fontWeight={800}>Unit Illustration</Typography>
+                                <Box sx={{
+                                    width: 44, height: 44, borderRadius: '14px',
+                                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    boxShadow: '0 8px 16px -4px rgba(16, 185, 129, 0.4)'
+                                }}>
+                                    <BarcodeIcon sx={{ color: '#fff', fontSize: 22 }} />
+                                </Box>
+                                <Typography variant="h5" fontWeight={800} letterSpacing="-0.01em">Barcode Tag</Typography>
                             </Box>
-                            <Divider sx={{ mb: 4 }} />
-                            <Box
-                                component="img"
-                                src={formData.photo_url}
-                                onError={(e) => { e.target.style.display = 'none'; }}
-                                sx={{
-                                    width: '100%',
-                                    maxHeight: 400,
-                                    objectFit: 'contain',
-                                    borderRadius: 4,
-                                    bgcolor: '#f8fafc',
-                                    border: '1px solid #e2e8f0',
-                                    p: 2
-                                }}
-                            />
+
+                            <Divider sx={{ mb: 4, opacity: 0.6 }} />
+
+                            <Box sx={{
+                                display: 'flex', flexDirection: 'column', alignItems: 'center',
+                                justifyContent: 'center', py: 5,
+                                bgcolor: 'rgba(255,255,255,0.4)', borderRadius: '20px', border: '1px solid',
+                                borderColor: 'divider',
+                                boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)'
+                            }}>
+                                {formData.serial_number ? (
+                                    <>
+                                        <Box sx={{ p: 1, bgcolor: '#fff', borderRadius: '8px', border: '1px solid #eee' }}>
+                                            <Barcode value={formData.serial_number} width={1.8} height={80} fontSize={14} background="#fff" />
+                                        </Box>
+                                        <Typography variant="caption" sx={{ mt: 3, color: 'text.disabled', fontWeight: 800, letterSpacing: '0.15em', textTransform: 'uppercase', fontSize: '0.65rem' }}>
+                                            Unit Inventory Identity
+                                        </Typography>
+                                    </>
+                                ) : (
+                                    <Typography color="text.secondary" fontWeight={500}>Input SN to generate barcode</Typography>
+                                )}
+                            </Box>
                         </Paper>
-                    )}
+
+                        {formData.photo_url && (
+                            <Paper className="glassmorphism" sx={{ p: { xs: 3, sm: 4 }, borderRadius: '24px' }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 4 }}>
+                                    <Typography variant="h5" fontWeight={800} letterSpacing="-0.01em">Unit Preview</Typography>
+                                </ Box>
+                                <Divider sx={{ mb: 4, opacity: 0.6 }} />
+                                <Box
+                                    component="img"
+                                    src={formData.photo_url}
+                                    onError={(e) => { e.target.style.display = 'none'; }}
+                                    sx={{
+                                        width: '100%',
+                                        maxHeight: 320,
+                                        objectFit: 'contain',
+                                        borderRadius: '20px',
+                                        bgcolor: 'rgba(0,0,0,0.02)',
+                                        p: 2,
+                                        transition: 'transform 0.3s ease',
+                                        '&:hover': { transform: 'scale(1.02)' }
+                                    }}
+                                />
+                            </Paper>
+                        )}
+                    </Stack>
                 </Grid>
             </Grid>
 
@@ -360,7 +406,7 @@ function AssetDetailsPage() {
                 onClose={() => setSnackbar({ ...snackbar, open: false })}
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
             >
-                <Alert severity={snackbar.severity} sx={{ borderRadius: 2 }}>
+                <Alert severity={snackbar.severity} sx={{ borderRadius: '12px', boxShadow: '0 8px 30px rgba(0,0,0,0.1)' }}>
                     {snackbar.message}
                 </Alert>
             </Snackbar>

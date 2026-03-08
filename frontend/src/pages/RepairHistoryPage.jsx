@@ -182,45 +182,65 @@ function RepairHistoryPage() {
 
       {/* Mobile: Cards */}
       {isMobile ? (
-        <Stack spacing={1.5}>
+        <Stack spacing={2}>
           {loading ? (
             [...Array(3)].map((_, i) => (
-              <Card key={i}><CardContent>
-                <Skeleton width="70%" height={24} /><Skeleton width="50%" /><Skeleton width="40%" />
-              </CardContent></Card>
+              <Card key={i} sx={{ borderRadius: 3, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}>
+                <CardContent>
+                  <Skeleton width="70%" height={24} sx={{ mb: 1 }} />
+                  <Skeleton width="90%" sx={{ mb: 0.5 }} />
+                  <Skeleton width="40%" />
+                </CardContent>
+              </Card>
             ))
           ) : repairs.length === 0 ? (
-            <Paper sx={{ py: 6, textAlign: 'center' }}>
-              <BuildIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
-              <Typography color="text.secondary">No repair history available</Typography>
+            <Paper variant="outlined" sx={{ py: 8, textAlign: 'center', borderRadius: 4, bgcolor: 'transparent', borderStyle: 'dashed' }}>
+              <BuildIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 2, opacity: 0.5 }} />
+              <Typography color="text.secondary" fontWeight={500}>No repair history available</Typography>
             </Paper>
           ) : (
             paginatedRepairs.map((repair) => (
-              <Card key={repair.id} sx={{ borderRadius: 3 }}>
-                <CardContent sx={{ pb: '12px !important' }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
-                    <Typography variant="subtitle2" fontWeight={700} sx={{ flex: 1, mr: 1 }}>
+              <Card key={repair.id} sx={{
+                borderRadius: 3,
+                border: 'none',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
+                '&:hover': { boxShadow: '0 8px 24px rgba(0,0,0,0.06)' }
+              }}>
+                <CardContent sx={{ p: 2.5 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                    <Typography variant="subtitle1" fontWeight={700} sx={{ flex: 1, mr: 1, color: 'text.primary', lineHeight: 1.3 }}>
                       {repair.fault_description}
                     </Typography>
                     {repair.status && (
-                      <Chip label={repair.status} color={statusColor(repair.status)} size="small" />
+                      <Chip
+                        label={repair.status}
+                        color={statusColor(repair.status)}
+                        size="small"
+                        sx={{ fontWeight: 700, fontSize: '0.65rem', height: 22 }}
+                      />
                     )}
                   </Box>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.5 }}>
                     {repair.repair_details}
                   </Typography>
+
                   {repair.action && (
-                    <Typography variant="caption" color="text.secondary">
-                      Action: {repair.action}
-                    </Typography>
+                    <Box sx={{ mb: 2, p: 1.5, bgcolor: 'grey.50', borderRadius: 2 }}>
+                      <Typography variant="caption" color="text.disabled" fontWeight={700} sx={{ textTransform: 'uppercase', display: 'block', mb: 0.5 }}>Action Taken</Typography>
+                      <Typography variant="body2" color="text.primary">{repair.action}</Typography>
+                    </Box>
                   )}
-                  <Divider sx={{ my: 1 }} />
-                  <Grid container spacing={1}>
+
+                  <Divider sx={{ my: 2, opacity: 0.6 }} />
+
+                  <Grid container spacing={2}>
                     {repair.completion_date && (
                       <Grid size={6}>
+                        <Typography variant="caption" color="text.disabled" fontWeight={700} sx={{ textTransform: 'uppercase', display: 'block', mb: 0.2 }}>Date</Typography>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          <CalendarIcon sx={{ fontSize: 13, color: 'text.disabled' }} />
-                          <Typography variant="caption" color="text.secondary">
+                          <CalendarIcon sx={{ fontSize: 13, color: 'text.secondary' }} />
+                          <Typography variant="caption" fontWeight={600} color="text.primary">
                             {new Date(repair.completion_date).toLocaleDateString('id-ID')}
                           </Typography>
                         </Box>
@@ -228,9 +248,10 @@ function RepairHistoryPage() {
                     )}
                     {repair.vendor && (
                       <Grid size={6}>
+                        <Typography variant="caption" color="text.disabled" fontWeight={700} sx={{ textTransform: 'uppercase', display: 'block', mb: 0.2 }}>Vendor</Typography>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          <VendorIcon sx={{ fontSize: 13, color: 'text.disabled' }} />
-                          <Typography variant="caption" color="text.secondary">{repair.vendor}</Typography>
+                          <VendorIcon sx={{ fontSize: 13, color: 'text.secondary' }} />
+                          <Typography variant="caption" fontWeight={600} color="text.primary">{repair.vendor}</Typography>
                         </Box>
                       </Grid>
                     )}
@@ -242,57 +263,57 @@ function RepairHistoryPage() {
         </Stack>
       ) : (
         /* Desktop: Table */
-        <Paper>
-          <TableContainer>
+        <Card sx={{ borderRadius: 3, boxShadow: '0 4px 20px rgba(0,0,0,0.05)', overflow: 'hidden', border: 'none' }}>
+          <TableContainer component={Paper} elevation={0}>
             <Table>
-              <TableHead>
+              <TableHead sx={{ bgcolor: 'grey.50' }}>
                 <TableRow>
-                  <TableCell>Fault Description</TableCell>
-                  <TableCell>Repair Details</TableCell>
-                  <TableCell>Action</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell>Completion Date</TableCell>
-                  <TableCell>Vendor</TableCell>
+                  <TableCell sx={{ fontWeight: 700, py: 2 }}>Fault Description</TableCell>
+                  <TableCell sx={{ fontWeight: 700, py: 2 }}>Repair Details</TableCell>
+                  <TableCell sx={{ fontWeight: 700, py: 2 }}>Action</TableCell>
+                  <TableCell sx={{ fontWeight: 700, py: 2 }}>Status</TableCell>
+                  <TableCell sx={{ fontWeight: 700, py: 2 }}>Completion Date</TableCell>
+                  <TableCell sx={{ fontWeight: 700, py: 2 }}>Vendor</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {loading ? (
                   [...Array(3)].map((_, i) => (
                     <TableRow key={i}>
-                      {[...Array(6)].map((_, j) => <TableCell key={j}><Skeleton /></TableCell>)}
+                      {[...Array(6)].map((_, j) => <TableCell key={j} sx={{ py: 2 }}><Skeleton /></TableCell>)}
                     </TableRow>
                   ))
                 ) : repairs.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} sx={{ py: 6, textAlign: 'center' }}>
-                      <BuildIcon sx={{ fontSize: 40, color: 'text.disabled', mb: 1, display: 'block', mx: 'auto' }} />
-                      <Typography color="text.secondary">No repair history available</Typography>
+                    <TableCell colSpan={6} sx={{ py: 10, textAlign: 'center' }}>
+                      <BuildIcon sx={{ fontSize: 40, color: 'text.disabled', mb: 2, display: 'block', mx: 'auto', opacity: 0.5 }} />
+                      <Typography color="text.secondary" fontWeight={500}>No repair history available</Typography>
                     </TableCell>
                   </TableRow>
                 ) : (
                   paginatedRepairs.map((repair) => (
-                    <TableRow key={repair.id}>
-                      <TableCell><Typography variant="body2" fontWeight={500}>{repair.fault_description}</Typography></TableCell>
-                      <TableCell><Typography variant="body2">{repair.repair_details}</Typography></TableCell>
-                      <TableCell>{repair.action || '—'}</TableCell>
-                      <TableCell>
+                    <TableRow key={repair.id} hover sx={{ '&:last-child td': { border: 0 } }}>
+                      <TableCell sx={{ py: 2 }}><Typography variant="body2" fontWeight={600} color="text.primary">{repair.fault_description}</Typography></TableCell>
+                      <TableCell sx={{ py: 2 }}><Typography variant="body2" color="text.secondary">{repair.repair_details}</Typography></TableCell>
+                      <TableCell sx={{ py: 2 }}>{repair.action || '—'}</TableCell>
+                      <TableCell sx={{ py: 2 }}>
                         {repair.status
-                          ? <Chip label={repair.status} color={statusColor(repair.status)} size="small" />
+                          ? <Chip label={repair.status} color={statusColor(repair.status)} size="small" variant="outlined" sx={{ fontWeight: 700, fontSize: '0.7rem' }} />
                           : '—'}
                       </TableCell>
-                      <TableCell>
+                      <TableCell sx={{ py: 2, whiteSpace: 'nowrap' }}>
                         {repair.completion_date
-                          ? new Date(repair.completion_date).toLocaleDateString('id-ID')
+                          ? new Date(repair.completion_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
                           : '—'}
                       </TableCell>
-                      <TableCell>{repair.vendor || '—'}</TableCell>
+                      <TableCell sx={{ py: 2 }}>{repair.vendor || '—'}</TableCell>
                     </TableRow>
                   ))
                 )}
               </TableBody>
             </Table>
           </TableContainer>
-        </Paper>
+        </Card>
       )}
 
       {/* Pagination component outside view switching for consistent UI */}
@@ -305,6 +326,7 @@ function RepairHistoryPage() {
           rowsPerPage={rowsPerPage}
           onRowsPerPageChange={handleChangeRowsPerPage}
           rowsPerPageOptions={[5, 10, 25, 50]}
+          sx={{ borderTop: '1px solid', borderColor: 'divider', mt: 1 }}
         />
       )}
 

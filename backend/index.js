@@ -82,7 +82,7 @@ app.post('/api/employees', async (req, res) => {
   }
 });
 
-// Endpoint untuk mencari employee berdasarkan nama (untuk autocomplete)
+// Endpoint untuk mencari employee berdasarkan nama atau email (untuk autocomplete)
 app.get('/api/employees/search', async (req, res) => {
   const { q } = req.query;
   if (!q) {
@@ -90,10 +90,35 @@ app.get('/api/employees/search', async (req, res) => {
   }
   try {
     const result = await pool.query(
-      "SELECT id, name, department, email FROM employees WHERE name ILIKE $1 ORDER BY name",
+      "SELECT id, name, department, email FROM employees WHERE name ILIKE $1 OR email ILIKE $1 ORDER BY name",
       [`%${q}%`]
     );
     res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Endpoint untuk mengupdate employee
+app.put('/api/employees/:id', async (req, res) => {
+  const { id } = req.params;
+  const { name, department, email } = req.body;
+
+  if (!name) {
+    return res.status(400).json({ error: "Name is required" });
+  }
+
+  try {
+    const result = await pool.query(
+      'UPDATE employees SET name = $1, department = $2, email = $3 WHERE id = $4 RETURNING *',
+      [name, department || null, email || null, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Employee not found" });
+    }
+
+    res.json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -167,6 +192,9 @@ app.put('/api/assets/:id', async (req, res) => {
       updatedBy = decoded.user.name || decoded.user.username;
       userRole = decoded.user.role;
     } catch (e) {
+      if (e.name === 'TokenExpiredError') {
+        return res.status(401).json({ error: 'Token expired' });
+      }
       return res.status(401).json({ error: 'Token tidak valid' });
     }
   }

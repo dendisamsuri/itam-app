@@ -4,7 +4,7 @@ import { supabase } from '../supabaseClient';
 import apiLocal from '../apiLocal';
 import {
   Box, Typography, TextField, Button, Link, Alert,
-  InputAdornment, IconButton, CircularProgress
+  InputAdornment, IconButton, CircularProgress, useTheme, useMediaQuery
 } from '@mui/material';
 import {
   Visibility, VisibilityOff,
@@ -21,6 +21,8 @@ function RegisterPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const navigate = useNavigate();
 
   const handleRegister = async (e) => {
@@ -98,22 +100,22 @@ function RegisterPage() {
         <Box
           sx={{
             background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
-            py: 3.5,
+            py: { xs: 2.5, sm: 3.5 },
             px: 4,
             textAlign: 'center',
           }}
         >
           <Box
             sx={{
-              width: 56, height: 56, borderRadius: '50%',
+              width: { xs: 48, sm: 56 }, height: { xs: 48, sm: 56 }, borderRadius: '50%',
               bgcolor: 'rgba(255,255,255,0.2)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               mx: 'auto', mb: 1.5,
             }}
           >
-            <InventoryIcon sx={{ color: '#fff', fontSize: 28 }} />
+            <InventoryIcon sx={{ color: '#fff', fontSize: { xs: 24, sm: 28 } }} />
           </Box>
-          <Typography variant="h6" sx={{ color: '#fff', fontWeight: 800 }}>
+          <Typography variant={isMobile ? 'subtitle1' : 'h6'} sx={{ color: '#fff', fontWeight: 800 }}>
             IT Asset Management
           </Typography>
         </Box>
