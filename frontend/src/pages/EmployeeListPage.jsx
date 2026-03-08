@@ -25,6 +25,7 @@ function EmployeeListPage() {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'md'));
+    const [totalEmployees, setTotalEmployees] = useState(0);
     const [employees, setEmployees] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -144,23 +145,36 @@ function EmployeeListPage() {
 
     const fetchEmployees = useCallback(async () => {
         try {
+            setLoading(true);
             if (import.meta.env.VITE_APP_ENV === 'local') {
                 const token = localStorage.getItem('token');
                 if (!token) { navigate('/login'); return; }
 
                 const { data } = await apiLocal.get('/employees');
                 setEmployees(data || []);
+                setTotalEmployees(data?.length || 0);
             } else {
                 const { data: { session } } = await supabase.auth.getSession();
                 if (!session) { navigate('/login'); return; }
 
-                const { data, error: fetchErr } = await supabase
+                let query = supabase
                     .from('employees')
-                    .select('id, name, department, email')
-                    .order('name', { ascending: true });
+                    .select('id, name, department, email', { count: 'exact' });
+
+                if (searchQuery) {
+                    query = query.or(`name.ilike.%${searchQuery}%,department.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`);
+                }
+
+                const from = page * rowsPerPage;
+                const to = from + rowsPerPage - 1;
+
+                const { data, error: fetchErr, count } = await query
+                    .order('name', { ascending: true })
+                    .range(from, to);
 
                 if (fetchErr) throw fetchErr;
                 setEmployees(data || []);
+                setTotalEmployees(count || 0);
             }
         } catch (err) {
             setError(err.message || 'Failed to fetch employees.');
@@ -168,7 +182,7 @@ function EmployeeListPage() {
         } finally {
             setLoading(false);
         }
-    }, [navigate]);
+    }, [navigate, page, rowsPerPage, searchQuery]);
 
     useEffect(() => {
         fetchEmployees();
@@ -183,13 +197,9 @@ function EmployeeListPage() {
         setPage(0);
     };
 
-    const filteredEmployees = employees.filter(emp =>
-        emp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (emp.email && emp.email.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (emp.department && emp.department.toLowerCase().includes(searchQuery.toLowerCase()))
-    );
+    const filteredEmployees = employees;
 
-    const paginatedEmployees = filteredEmployees.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+    const paginatedEmployees = employees;
 
     if (loading) {
         return (
@@ -372,10 +382,10 @@ function EmployeeListPage() {
                 </Card>
             )}
 
-            {filteredEmployees.length > 0 && (
+            {totalEmployees > 0 && (
                 <TablePagination
                     component="div"
-                    count={filteredEmployees.length}
+                    count={totalEmployees}
                     page={page}
                     onPageChange={handleChangePage}
                     rowsPerPage={rowsPerPage}

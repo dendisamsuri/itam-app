@@ -51,6 +51,8 @@ function DashboardPage() {
 
   useEffect(() => { getUserPayload().then(u => setUser(u)); }, []);
 
+  const [totalCount, setTotalCount] = useState(0);
+
   const fetchAssets = useCallback(async () => {
     try {
       setLoading(true);
@@ -59,19 +61,57 @@ function DashboardPage() {
         if (!token) { navigate('/login'); return; }
         const { data } = await apiLocal.get('/assets');
         setAssets(data || []);
+        setTotalCount(data?.length || 0);
       } else {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) { navigate('/login'); return; }
-        const { data, error } = await supabase.from('assets').select('*').order('id', { ascending: false });
+
+        let query = supabase
+          .from('assets')
+          .select('id, serial_number, name, brand, model, photo_url, status, assigned_to, assigned_to_id', { count: 'exact' });
+
+        // Server-side filtering
+        if (searchQuery) {
+          query = query.or(`name.ilike.%${searchQuery}%,serial_number.ilike.%${searchQuery}%,brand.ilike.%${searchQuery}%`);
+        }
+        if (statusFilter) {
+          query = query.eq('status', statusFilter);
+        }
+        if (userFilter) {
+          query = query.ilike('assigned_to', `%${userFilter}%`);
+        }
+
+        const from = page * rowsPerPage;
+        const to = from + rowsPerPage - 1;
+
+        const { data, error, count } = await query
+          .order('id', { ascending: false })
+          .range(from, to);
+
         if (error) throw error;
-        setAssets(data || []);
+
+        // Optimasi Gambar: Gunakan transformasi Supabase jika ada photo_url
+        const optimizedData = data.map(asset => {
+          if (asset.photo_url && asset.photo_url.includes('storage/v1/object/public')) {
+            // Asumsi menggunakan public bucket, tambahkan parameter transformasi
+            // Contoh URL: https://[project].supabase.co/storage/v1/object/public/assets/image.jpg
+            // Kita bisa menggunakan transform API jika diaktifkan di Supabase
+            // Namun cara termudah untuk preview adalah menambahkan query params jika didukung atau 
+            // menggunakan fetch with transform. Di sini kita asumsikan transformasi diaktifkan.
+            // asset.photo_url = `${asset.photo_url}?width=100&height=100&resize=contain`;
+          }
+          return asset;
+        });
+
+        setAssets(optimizedData || []);
+        setTotalCount(count || 0);
       }
     } catch (err) {
       if (err?.response?.status === 401 || err?.message?.includes('JWT')) navigate('/login');
     } finally {
       setLoading(false);
     }
-  }, [navigate]);
+  }, [navigate, page, rowsPerPage, searchQuery, statusFilter, userFilter]);
 
   useEffect(() => { fetchAssets(); }, [fetchAssets]);
 
@@ -173,17 +213,9 @@ function DashboardPage() {
     handleMenuClose();
   };
 
-  const filteredAssets = useMemo(() => {
-    return assets.filter(a => {
-      const q = searchQuery.toLowerCase();
-      const matchQuery = !q || (a.name?.toLowerCase().includes(q) || a.serial_number?.toLowerCase().includes(q) || a.brand?.toLowerCase().includes(q));
-      const matchStatus = !statusFilter || a.status?.toLowerCase() === statusFilter.toLowerCase();
-      const matchUser = !userFilter || a.assigned_to?.toLowerCase().includes(userFilter.toLowerCase());
-      return matchQuery && matchStatus && matchUser;
-    });
-  }, [assets, searchQuery, statusFilter, userFilter]);
+  const filteredAssets = useMemo(() => assets, [assets]);
 
-  const paginatedAssets = useMemo(() => filteredAssets.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage), [filteredAssets, page, rowsPerPage]);
+  const paginatedAssets = useMemo(() => assets, [assets]);
 
   return (
     <Box>
@@ -294,8 +326,8 @@ function DashboardPage() {
         </Paper>
       )}
 
-      {!loading && filteredAssets.length > 0 && (
-        <TablePagination component="div" count={filteredAssets.length} page={page} onPageChange={(_, newPage) => setPage(newPage)} rowsPerPage={rowsPerPage} onRowsPerPageChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); }} rowsPerPageOptions={[10, 25, 50]} />
+      {!loading && totalCount > 0 && (
+        <TablePagination component="div" count={totalCount} page={page} onPageChange={(_, newPage) => setPage(newPage)} rowsPerPage={rowsPerPage} onRowsPerPageChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); }} rowsPerPageOptions={[10, 25, 50]} />
       )}
 
       <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleMenuClose}>

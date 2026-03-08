@@ -29,6 +29,7 @@ const statusColor = (s) => {
 
 function RepairHistoryPage() {
   const { id: assetId } = useParams();
+  const [totalRepairs, setTotalRepairs] = useState(0);
   const [repairs, setRepairs] = useState([]);
   const [asset, setAsset] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -70,14 +71,20 @@ function RepairHistoryPage() {
         if (assetErr) throw assetErr;
         setAsset(assetData);
 
-        // Fetch repairs
-        const { data: repairData, error: repairErr } = await supabase
+        // Fetch repairs with pagination
+        const from = page * rowsPerPage;
+        const to = from + rowsPerPage - 1;
+
+        const { data: repairData, error: repairErr, count } = await supabase
           .from('repair_logs')
-          .select('*')
+          .select('*', { count: 'exact' })
           .eq('asset_id', assetId)
-          .order('repair_date', { ascending: false });
+          .order('repair_date', { ascending: false })
+          .range(from, to);
+
         if (repairErr) throw repairErr;
         setRepairs(repairData || []);
+        setTotalRepairs(count || 0);
       }
     } catch (err) {
       setPageError(err.message || 'Failed to load repair history.');
@@ -110,7 +117,7 @@ function RepairHistoryPage() {
     setPage(0);
   };
 
-  const paginatedRepairs = repairs.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+  const paginatedRepairs = repairs;
 
   const handleAddRepair = async () => {
     if (!formData.fault_description || !formData.repair_details) {
@@ -317,10 +324,10 @@ function RepairHistoryPage() {
       )}
 
       {/* Pagination component outside view switching for consistent UI */}
-      {!loading && repairs.length > 0 && (
+      {!loading && totalRepairs > 0 && (
         <TablePagination
           component="div"
-          count={repairs.length}
+          count={totalRepairs}
           page={page}
           onPageChange={handleChangePage}
           rowsPerPage={rowsPerPage}

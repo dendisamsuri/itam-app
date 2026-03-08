@@ -19,45 +19,65 @@ function GlobalAssetHistoryPage() {
     const [actionFilter, setActionFilter] = useState('');
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
+    const [totalHistory, setTotalHistory] = useState(0);
     const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(15);
 
     const fetchHistory = useCallback(async () => {
         try {
+            setLoading(true);
             if (import.meta.env.VITE_APP_ENV === 'local') {
                 const token = localStorage.getItem('token');
                 if (!token) return;
                 const { data } = await apiLocal.get('/history');
                 setHistory(data || []);
+                setTotalHistory(data?.length || 0);
             } else {
                 const { data: { session } } = await supabase.auth.getSession();
                 if (!session) return;
-                const { data, error } = await supabase.from('asset_history_view').select('*').order('created_at', { ascending: false });
+
+                let query = supabase
+                    .from('asset_history_view')
+                    .select('*', { count: 'exact' });
+
+                // Server-side filtering
+                if (searchQuery) {
+                    query = query.or(`asset_name.ilike.%${searchQuery}%,serial_number.ilike.%${searchQuery}%,from_user.ilike.%${searchQuery}%,to_user.ilike.%${searchQuery}%`);
+                }
+                if (actionFilter) {
+                    query = query.eq('action_type', actionFilter);
+                }
+                if (startDate) {
+                    query = query.gte('created_at', startDate);
+                }
+                if (endDate) {
+                    query = query.lte('created_at', endDate + 'T23:59:59');
+                }
+
+                const from = page * rowsPerPage;
+                const to = from + rowsPerPage - 1;
+
+                const { data, error, count } = await query
+                    .order('created_at', { ascending: false })
+                    .range(from, to);
+
                 if (error) throw error;
                 setHistory(data || []);
+                setTotalHistory(count || 0);
             }
-        } catch (err) { setError(err.message || 'Failed to fetch global asset history.'); } finally { setLoading(false); }
-    }, []);
+        } catch (err) {
+            setError(err.message || 'Failed to fetch global asset history.');
+        } finally {
+            setLoading(false);
+        }
+    }, [page, rowsPerPage, searchQuery, actionFilter, startDate, endDate]);
 
     useEffect(() => { fetchHistory(); }, [fetchHistory]);
     useEffect(() => { setPage(0); }, [searchQuery, actionFilter, startDate, endDate]);
 
-    const filteredHistory = useMemo(() => {
-        return history.filter(log => {
-            const q = searchQuery.toLowerCase();
-            const matchesSearch = !q || (log.asset_name?.toLowerCase().includes(q) || log.serial_number?.toLowerCase().includes(q) || log.from_user?.toLowerCase().includes(q) || log.to_user?.toLowerCase().includes(q));
-            const matchesAction = !actionFilter || log.action_type === actionFilter;
-            let matchesDate = true;
-            if (startDate || endDate) {
-                const logDate = new Date(log.created_at);
-                if (startDate && logDate < new Date(startDate).setHours(0, 0, 0, 0)) matchesDate = false;
-                if (endDate && logDate > new Date(endDate).setHours(23, 59, 59, 999)) matchesDate = false;
-            }
-            return matchesSearch && matchesAction && matchesDate;
-        });
-    }, [history, searchQuery, actionFilter, startDate, endDate]);
+    const filteredHistory = history;
 
-    const paginatedHistory = useMemo(() => filteredHistory.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage), [filteredHistory, page, rowsPerPage]);
+    const paginatedHistory = history;
 
     if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress /></Box>;
 
@@ -198,8 +218,8 @@ function GlobalAssetHistoryPage() {
                 </Paper>
             )}
 
-            {filteredHistory.length > 0 && (
-                <TablePagination component="div" count={filteredHistory.length} page={page} onPageChange={(_, newP) => setPage(newP)} rowsPerPage={rowsPerPage} onRowsPerPageChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); }} rowsPerPageOptions={[15, 30, 50]} />
+            {totalHistory > 0 && (
+                <TablePagination component="div" count={totalHistory} page={page} onPageChange={(_, newP) => setPage(newP)} rowsPerPage={rowsPerPage} onRowsPerPageChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); }} rowsPerPageOptions={[15, 30, 50]} />
             )}
         </Box>
     );

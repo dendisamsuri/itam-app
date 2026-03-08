@@ -69,22 +69,35 @@ ALTER TABLE repair_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 
 -- Allow all authenticated users to read
+DROP POLICY IF EXISTS "Allow authenticated read access" ON employees;
 CREATE POLICY "Allow authenticated read access" ON employees FOR SELECT TO authenticated USING (true);
+DROP POLICY IF EXISTS "Allow authenticated read access" ON assets;
 CREATE POLICY "Allow authenticated read access" ON assets FOR SELECT TO authenticated USING (true);
+DROP POLICY IF EXISTS "Allow authenticated read access" ON asset_history;
 CREATE POLICY "Allow authenticated read access" ON asset_history FOR SELECT TO authenticated USING (true);
+DROP POLICY IF EXISTS "Allow authenticated read access" ON repair_logs;
 CREATE POLICY "Allow authenticated read access" ON repair_logs FOR SELECT TO authenticated USING (true);
+DROP POLICY IF EXISTS "Allow authenticated read access" ON public.users;
 CREATE POLICY "Allow authenticated read access" ON public.users FOR SELECT TO authenticated USING (true);
 
 -- Allow all authenticated users to insert
+DROP POLICY IF EXISTS "Allow authenticated insert" ON employees;
 CREATE POLICY "Allow authenticated insert" ON employees FOR INSERT TO authenticated WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow authenticated insert" ON assets;
 CREATE POLICY "Allow authenticated insert" ON assets FOR INSERT TO authenticated WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow authenticated insert" ON asset_history;
 CREATE POLICY "Allow authenticated insert" ON asset_history FOR INSERT TO authenticated WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow authenticated insert" ON repair_logs;
 CREATE POLICY "Allow authenticated insert" ON repair_logs FOR INSERT TO authenticated WITH CHECK (true);
 
 -- Allow all authenticated users to update
+DROP POLICY IF EXISTS "Allow authenticated update" ON employees;
 CREATE POLICY "Allow authenticated update" ON employees FOR UPDATE TO authenticated USING (true);
+DROP POLICY IF EXISTS "Allow authenticated update" ON assets;
 CREATE POLICY "Allow authenticated update" ON assets FOR UPDATE TO authenticated USING (true);
+DROP POLICY IF EXISTS "Allow authenticated update" ON asset_history;
 CREATE POLICY "Allow authenticated update" ON asset_history FOR UPDATE TO authenticated USING (true);
+DROP POLICY IF EXISTS "Allow authenticated update" ON repair_logs;
 CREATE POLICY "Allow authenticated update" ON repair_logs FOR UPDATE TO authenticated USING (true);
 
 -- Trigger to auto-create public.users profile when a new auth user is created in Supabase
@@ -121,3 +134,12 @@ CREATE OR REPLACE VIEW repair_logs_view AS
 SELECT r.*, a.name as asset_name, a.serial_number 
 FROM repair_logs r 
 JOIN assets a ON r.asset_id = a.id;
+
+-- 6. Add indices for performance
+CREATE INDEX IF NOT EXISTS idx_assets_assigned_to_id ON assets(assigned_to_id);
+CREATE INDEX IF NOT EXISTS idx_assets_status ON assets(status);
+CREATE INDEX IF NOT EXISTS idx_asset_history_asset_id ON asset_history(asset_id);
+CREATE INDEX IF NOT EXISTS idx_asset_history_from_user_id ON asset_history(from_user_id);
+CREATE INDEX IF NOT EXISTS idx_asset_history_to_user_id ON asset_history(to_user_id);
+CREATE INDEX IF NOT EXISTS idx_repair_logs_asset_id ON repair_logs(asset_id);
+CREATE INDEX IF NOT EXISTS idx_repair_logs_status ON repair_logs(status);

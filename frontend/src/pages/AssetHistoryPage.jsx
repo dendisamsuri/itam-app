@@ -108,6 +108,7 @@ export default function AssetHistoryPage() {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
+    const [totalHistory, setTotalHistory] = useState(0);
     const [asset, setAsset] = useState(null);
     const [history, setHistory] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -132,6 +133,7 @@ export default function AssetHistoryPage() {
                     asset_name: data.asset?.name,
                     serial_number: data.asset?.serial_number,
                 })));
+                setTotalHistory(data.history?.length || 0);
             } else {
                 const { data: { session } } = await supabase.auth.getSession();
                 if (!session) { navigate('/login'); return; }
@@ -140,17 +142,40 @@ export default function AssetHistoryPage() {
                 const { data: assetData } = await supabase.from('assets').select('name, serial_number').eq('id', assetId).single();
                 setAsset(assetData);
 
-                const { data, error: err } = await supabase
+                let query = supabase
                     .from('asset_history')
-                    .select('id, action_type, from_user, to_user, notes, created_at')
-                    .eq('asset_id', assetId)
-                    .order('created_at', { ascending: false });
+                    .select('id, action_type, from_user, to_user, notes, created_at', { count: 'exact' })
+                    .eq('asset_id', assetId);
+
+                // Server-side filtering
+                if (actionFilter) {
+                    query = query.eq('action_type', actionFilter);
+                }
+                if (startDate) {
+                    query = query.gte('created_at', startDate);
+                }
+                if (endDate) {
+                    query = query.lte('created_at', endDate + 'T23:59:59');
+                }
+                // Search filter (limited support for multi-column search in standard query, but we can try)
+                if (search) {
+                    query = query.or(`from_user.ilike.%${search}%,to_user.ilike.%${search}%,notes.ilike.%${search}%`);
+                }
+
+                const from = page * rowsPerPage;
+                const to = from + rowsPerPage - 1;
+
+                const { data, error: err, count } = await query
+                    .order('created_at', { ascending: false })
+                    .range(from, to);
+
                 if (err) throw err;
                 setHistory((data || []).map(h => ({
                     ...h,
                     asset_name: assetData?.name,
                     serial_number: assetData?.serial_number,
                 })));
+                setTotalHistory(count || 0);
             }
         } catch (err) {
             setError(err.message || 'Gagal memuat data.');
@@ -158,7 +183,7 @@ export default function AssetHistoryPage() {
         } finally {
             setLoading(false);
         }
-    }, [assetId, navigate]);
+    }, [assetId, navigate, page, rowsPerPage, actionFilter, startDate, endDate, search]);
 
     useEffect(() => { fetchHistory(); }, [fetchHistory]);
 
@@ -169,18 +194,9 @@ export default function AssetHistoryPage() {
         return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     };
 
-    const filtered = history.filter(h => {
-        const q = search.toLowerCase();
-        const matchSearch = !q || [h.asset_name, h.serial_number, h.from_user, h.to_user, h.notes]
-            .some(v => (v || '').toLowerCase().includes(q));
-        const matchAction = !actionFilter || h.action_type?.toUpperCase() === actionFilter;
-        const created = h.created_at ? new Date(h.created_at) : null;
-        const matchStart = !startDate || (created && created >= new Date(startDate));
-        const matchEnd = !endDate || (created && created <= new Date(endDate + 'T23:59:59'));
-        return matchSearch && matchAction && matchStart && matchEnd;
-    });
+    const filtered = history;
 
-    const paginated = filtered.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+    const paginated = history;
     const actionTypes = [...new Set(history.map(h => h.action_type?.toUpperCase()).filter(Boolean))];
     const hasFilter = search || actionFilter || startDate || endDate;
 
@@ -333,12 +349,13 @@ export default function AssetHistoryPage() {
                             </TableBody>
                         </Table>
                     </TableContainer>
-                    {filtered.length > 0 && (
+                    {totalHistory > 0 && (
                         <Box sx={{ borderTop: '1px solid', borderColor: 'divider' }}>
-                            <TablePagination component="div" count={filtered.length} page={page}
+                            <TablePagination component="div" page={page}
                                 onPageChange={(_, p) => setPage(p)} rowsPerPage={rowsPerPage}
                                 onRowsPerPageChange={e => { setRowsPerPage(+e.target.value); setPage(0); }}
                                 rowsPerPageOptions={[5, 10, 25, 50]} labelRowsPerPage="Baris:"
+                                count={totalHistory}
                                 sx={{ '& .MuiTablePagination-toolbar': { minHeight: 44 } }} />
                         </Box>
                     )}
@@ -356,12 +373,14 @@ export default function AssetHistoryPage() {
                     ) : (
                         <>
                             <Stack spacing={1.5} mb={1}>
-                                {paginated.map(log => <HistoryCard key={log.id} log={log} formatDate={formatDate} />)}
+                                {history.map(log => <HistoryCard key={log.id} log={log} formatDate={formatDate} />)}
                             </Stack>
-                            <TablePagination component="div" count={filtered.length} page={page}
-                                onPageChange={(_, p) => setPage(p)} rowsPerPage={rowsPerPage}
-                                onRowsPerPageChange={e => { setRowsPerPage(+e.target.value); setPage(0); }}
-                                rowsPerPageOptions={[5, 10, 25]} labelRowsPerPage="Baris:" />
+                            {totalHistory > 0 && (
+                                <TablePagination component="div" count={totalHistory} page={page}
+                                    onPageChange={(_, p) => setPage(p)} rowsPerPage={rowsPerPage}
+                                    onRowsPerPageChange={e => { setRowsPerPage(+e.target.value); setPage(0); }}
+                                    rowsPerPageOptions={[5, 10, 25]} labelRowsPerPage="Baris:" />
+                            )}
                         </>
                     )}
                 </>
