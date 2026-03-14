@@ -178,12 +178,17 @@ export const dataService = {
             if (updErr) throw updErr;
             return { success: true };
         } else {
-            // Need user name for updated_by
-            // We'll pass it in or let the page handle it for now, 
-            // but sticking to the pattern in AssetDetailsPage.jsx:
+            // BUG FIX: Filter out non-existent columns (joined fields)
+            const { 
+                id: _, 
+                part_of_name, part_of_brand, part_of_serial, part_of_owner,
+                parent, 
+                ...validData 
+            } = formData;
+
             const { error: updErr } = await supabase
                 .from('assets')
-                .update(formData)
+                .update(validData)
                 .eq('id', id);
 
             if (updErr) throw updErr;
@@ -196,7 +201,12 @@ export const dataService = {
             await apiLocal.post('/api/assets', payload);
             return { success: true };
         } else {
-            const { error } = await supabase.from('assets').insert(payload);
+            // BUG FIX: Filter out non-existent columns if they happen to be in payload
+            const { 
+                part_of_name, part_of_brand, part_of_serial, part_of_owner, 
+                ...validData 
+            } = payload;
+            const { error } = await supabase.from('assets').insert(validData);
             if (error) throw error;
             return { success: true };
         }
@@ -253,6 +263,35 @@ export const dataService = {
                 from_user_id: current_asset.assigned_to_id, 
                 to_user_id: to_user_id 
             });
+
+            // BUG FIX: Cascading Handover/Return for child assets
+            const { data: children, error: childErr } = await supabase
+                .from('assets')
+                .select('id, assigned_to, assigned_to_id')
+                .eq('part_of_id', id);
+            
+            if (childErr) {
+                console.error(`Failed to fetch children for asset ${id} for cascading ${action_type}:`, childErr);
+            } else if (children && children.length > 0) {
+                for (const child of children) {
+                    await supabase.from('assets').update({ 
+                        status, 
+                        assigned_to: to_user_name, 
+                        assigned_to_id: to_user_id 
+                    }).eq('id', child.id);
+
+                    await supabase.from('asset_history').insert({ 
+                        asset_id: child.id, 
+                        action_type: action_type, 
+                        from_user: child.assigned_to, 
+                        to_user: to_user_name, 
+                        notes: `Auto-cascaded from parent asset #${id}: ${notes || ''}`.trim(), 
+                        from_user_id: child.assigned_to_id, 
+                        to_user_id: to_user_id 
+                    });
+                }
+            }
+
             return { success: true };
         }
     },
@@ -341,12 +380,24 @@ export const dataService = {
             await apiLocal.put(`/api/users/${id}`, userData);
             return { success: true };
         } else {
-            const { error } = await supabase
+            // BUG FIX: Remove ID from payload and add error handling
+            const { id: _, ...validData } = userData;
+            const { data, error } = await supabase
                 .from('users')
-                .update(userData)
-                .eq('id', id);
-            if (error) throw error;
-            return { success: true };
+                .update(validData)
+                .eq('id', id)
+                .select();
+            
+            if (error) {
+                console.error(`Supabase User Update Error (${id}):`, error);
+                throw error;
+            }
+            
+            // If we successfully updated, let's also update the auth.users metadata 
+            // but that might require service role or be handled via trigger.
+            // The schema has a trigger but it's only for AFTER INSERT.
+            
+            return { success: true, data };
         }
     },
 
