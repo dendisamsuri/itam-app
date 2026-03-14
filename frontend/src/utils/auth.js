@@ -33,10 +33,19 @@ export const getUserPayload = async () => {
     try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return null;
+
+        // Query public.users table for the authoritative role
+        // (user_metadata can be stale or empty if user was created via Supabase dashboard)
+        const { data: profile } = await supabase
+            .from('users')
+            .select('role, name')
+            .eq('id', user.id)
+            .single();
+
         return {
             id: user.id,
-            role: user.user_metadata?.role || 'user',
-            name: user.user_metadata?.name || 'User'
+            role: profile?.role || user.user_metadata?.role || 'user',
+            name: profile?.name || user.user_metadata?.name || 'User'
         };
     } catch (e) {
         console.error('Failed to get Supabase user:', e);

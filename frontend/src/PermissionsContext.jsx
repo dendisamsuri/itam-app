@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import apiLocal from './apiLocal';
+import { supabase } from './supabaseClient';
 import { getUserPayload } from './utils/auth';
 
 const PermissionsContext = createContext();
@@ -12,11 +13,10 @@ export function PermissionsProvider({ children }) {
     const [loaded, setLoaded] = useState(false);
 
     const fetchPermissions = useCallback(async () => {
-        const isLocal = import.meta.env.VITE_APP_ENV === 'local';
         const token = localStorage.getItem('token');
         const isAuthPage = window.location.pathname === '/login' || window.location.pathname === '/register';
 
-        if (!isLocal || !token || isAuthPage) {
+        if (!token || isAuthPage) {
             setLoaded(true);
             return;
         }
@@ -29,10 +29,27 @@ export function PermissionsProvider({ children }) {
             }
             setUserRole(user.role);
 
-            const { data } = await apiLocal.get('/api/role-permissions');
+            let allPermissions = [];
+            const isLocal = import.meta.env.VITE_APP_ENV === 'local';
+
+            if (isLocal) {
+                // Local mode: fetch from backend API
+                const { data } = await apiLocal.get('/api/role-permissions');
+                allPermissions = data;
+            } else {
+                // Supabase mode: query role_permissions table directly
+                const { data, error } = await supabase
+                    .from('role_permissions')
+                    .select('*')
+                    .order('role_name');
+                if (!error && data) {
+                    allPermissions = data;
+                }
+            }
+
             const permMap = {};
-            if (Array.isArray(data)) {
-                for (const p of data) {
+            if (Array.isArray(allPermissions)) {
+                for (const p of allPermissions) {
                     if (p.role_name === user.role) {
                         permMap[p.menu_key] = {
                             can_view: p.can_view || false,
@@ -69,3 +86,4 @@ export function PermissionsProvider({ children }) {
         </PermissionsContext.Provider>
     );
 }
+
