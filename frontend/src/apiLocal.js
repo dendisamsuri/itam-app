@@ -19,7 +19,7 @@ apiLocal.interceptors.response.use(
 
         if (error.response && (error.response.status === 400 || error.response.status === 401)) {
             const errorMsg = error.response.data?.error;
-            if ((errorMsg === 'Token expired' || errorMsg === 'Token tidak valid' || error.response.status === 401) && !isLoginRequest) {
+            if ((errorMsg === 'Token expired' || errorMsg === 'Token tidak valid' || error.response.status === 401) && !isLoginRequest && window.location.pathname !== '/login') {
                 localStorage.removeItem('token');
                 window.location.href = '/login';
             }

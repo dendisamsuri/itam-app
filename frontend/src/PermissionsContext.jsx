@@ -12,6 +12,14 @@ export function PermissionsProvider({ children }) {
     const [loaded, setLoaded] = useState(false);
 
     const fetchPermissions = useCallback(async () => {
+        const token = localStorage.getItem('token');
+        const isAuthPage = window.location.pathname === '/login' || window.location.pathname === '/register';
+
+        if (!token || isAuthPage) {
+            setLoaded(true);
+            return;
+        }
+
         try {
             const user = await getUserPayload();
             if (!user) {
