@@ -375,12 +375,36 @@ export const dataService = {
             await apiLocal.put(`/api/employees/${id}`, employeeData);
             return { success: true };
         } else {
-            const { error } = await supabase
+            // BUG FIX: Filter out ID and clean payload
+            const { id: _, ...validData } = employeeData;
+            
+            const cleanData = {};
+            Object.entries(validData).forEach(([key, value]) => {
+                if (value === '' && (key === 'email' || key === 'department')) {
+                    cleanData[key] = null;
+                } else {
+                    cleanData[key] = value;
+                }
+            });
+
+            console.log(`Updating employee ${id} with:`, cleanData);
+
+            const { data, error } = await supabase
                 .from('employees')
-                .update(employeeData)
-                .eq('id', id);
-            if (error) throw error;
-            return { success: true };
+                .update(cleanData)
+                .eq('id', id)
+                .select();
+            
+            if (error) {
+                console.error(`Supabase Employee Update Error (${id}):`, error);
+                throw error;
+            }
+
+            if (!data || data.length === 0) {
+                console.warn(`No employee found with ID ${id} or no changes were made. Check RLS policies.`);
+            }
+
+            return { success: true, data };
         }
     },
 
