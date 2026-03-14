@@ -186,9 +186,21 @@ export const dataService = {
                 ...validData 
             } = formData;
 
+            // BUG FIX: Convert empty strings to null for specific fields to avoid PG errors
+            const payload = {};
+            Object.entries(validData).forEach(([key, value]) => {
+                if (value === '' && (key === 'part_of_id' || key === 'purchase_date' || key === 'warranty_expiry' || key === 'photo_url')) {
+                    payload[key] = null;
+                } else if (key === 'part_of_id' && value) {
+                    payload[key] = parseInt(value, 10);
+                } else {
+                    payload[key] = value;
+                }
+            });
+
             const { error: updErr } = await supabase
                 .from('assets')
-                .update(validData)
+                .update(payload)
                 .eq('id', id);
 
             if (updErr) throw updErr;
@@ -206,7 +218,20 @@ export const dataService = {
                 part_of_name, part_of_brand, part_of_serial, part_of_owner, 
                 ...validData 
             } = payload;
-            const { error } = await supabase.from('assets').insert(validData);
+
+            // BUG FIX: Convert empty strings to null
+            const cleanData = {};
+            Object.entries(validData).forEach(([key, value]) => {
+                if (value === '' && (key === 'part_of_id' || key === 'purchase_date' || key === 'warranty_expiry' || key === 'photo_url')) {
+                    cleanData[key] = null;
+                } else if (key === 'part_of_id' && value) {
+                    cleanData[key] = parseInt(value, 10);
+                } else {
+                    cleanData[key] = value;
+                }
+            });
+
+            const { error } = await supabase.from('assets').insert(cleanData);
             if (error) throw error;
             return { success: true };
         }
@@ -381,7 +406,11 @@ export const dataService = {
             return { success: true };
         } else {
             // BUG FIX: Remove ID from payload and add error handling
-            const { id: _, ...validData } = userData;
+            const { id: _, username, ...validData } = userData;
+            
+            // Log for debugging
+            console.log(`Updating user ${id} with:`, validData);
+
             const { data, error } = await supabase
                 .from('users')
                 .update(validData)
@@ -392,10 +421,12 @@ export const dataService = {
                 console.error(`Supabase User Update Error (${id}):`, error);
                 throw error;
             }
-            
-            // If we successfully updated, let's also update the auth.users metadata 
-            // but that might require service role or be handled via trigger.
-            // The schema has a trigger but it's only for AFTER INSERT.
+
+            if (!data || data.length === 0) {
+                console.warn(`No user found with ID ${id} or no changes were made.`);
+            } else {
+                console.log(`Successfully updated user ${id}:`, data[0]);
+            }
             
             return { success: true, data };
         }
