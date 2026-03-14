@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { Box, Typography, TextField, Button, Alert, Paper, MenuItem } from '@mui/material';
 import { PersonAddOutlined as PersonAddIcon } from '@mui/icons-material';
-import { supabase } from '../supabaseClient';
-import apiLocal from '../apiLocal';
+import { dataService } from '../utils/dataService';
 import PageContainer from '../components/PageContainer';
 import PageHeader from '../components/PageHeader';
 
@@ -21,37 +20,17 @@ function AddUserPage() {
         e.preventDefault();
         setError(''); setSuccess(''); setLoading(true);
         try {
-            if (import.meta.env.VITE_APP_ENV === 'local') {
-                await apiLocal.post('/api/register', {
-                    name,
-                    department,
-                    username,
-                    email,
-                    password,
-                    role
-                });
+            await dataService.registerUser({
+                name,
+                department,
+                username,
+                email,
+                password,
+                role
+            });
 
-                setSuccess("User successfully added!");
-                setName(''); setDepartment(''); setUsername(''); setEmail(''); setPassword(''); setRole('user');
-            } else {
-                const userEmail = email || (username.includes('@') ? username : `${username}@itam.local`);
-                const { data, error: authError } = await supabase.auth.signUp({
-                    email: userEmail,
-                    password: password,
-                    options: {
-                        data: {
-                            name: name,
-                            department: department,
-                            role: role
-                        }
-                    }
-                });
-
-                if (authError) throw authError;
-
-                setSuccess("User successfully added!");
-                setName(''); setDepartment(''); setUsername(''); setEmail(''); setPassword(''); setRole('user');
-            }
+            setSuccess("User successfully added!");
+            setName(''); setDepartment(''); setUsername(''); setEmail(''); setPassword(''); setRole('user');
         } catch (err) {
             if (err.response && err.response.data && err.response.data.error) {
                 setError(err.response.data.error);

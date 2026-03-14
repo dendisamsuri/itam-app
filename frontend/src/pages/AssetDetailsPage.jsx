@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { supabase } from '../supabaseClient';
-import apiLocal from '../apiLocal';
+import { dataService } from '../utils/dataService';
 import {
     Paper, Typography, TextField, Button, Box, Grid, Alert,
     Divider, InputAdornment, Skeleton, Snackbar, IconButton,
@@ -65,69 +64,32 @@ function AssetDetailsPage() {
     const fetchAssetDetails = useCallback(async () => {
         try {
             setLoading(true);
-            if (import.meta.env.VITE_APP_ENV === 'local') {
-                const token = localStorage.getItem('token');
-                if (!token) { navigate('/login'); return; }
+            const asset = await dataService.getAssetById(assetId);
 
-                const { data: asset } = await apiLocal.get(`/api/assets/${assetId}`);
+            // Format dates for input type="date"
+            if (asset.purchase_date) asset.purchase_date = asset.purchase_date.split('T')[0];
+            if (asset.warranty_expiry) asset.warranty_expiry = asset.warranty_expiry.split('T')[0];
 
-                // Format dates for input type="date"
-                if (asset.purchase_date) asset.purchase_date = asset.purchase_date.split('T')[0];
-                if (asset.warranty_expiry) asset.warranty_expiry = asset.warranty_expiry.split('T')[0];
-
-                setFormData({
-                    serial_number: asset.serial_number || '',
-                    name: asset.name || '',
-                    brand: asset.brand || '',
-                    model: asset.model || '',
-                    specs: asset.specs || '',
-                    photo_url: asset.photo_url || '',
-                    purchase_date: asset.purchase_date || '',
-                    warranty_expiry: asset.warranty_expiry || '',
-                    part_of_id: asset.part_of_id || '',
-                    part_of_name: asset.part_of_name || '',
-                    part_of_brand: asset.part_of_brand || '',
-                    part_of_serial: asset.part_of_serial || '',
-                    part_of_owner: asset.part_of_owner || ''
-                });
-                setOriginalAsset(asset);
-            } else {
-                const { data: { session } } = await supabase.auth.getSession();
-                if (!session) { navigate('/login'); return; }
-
-                const { data: asset, error: fetchErr } = await supabase
-                    .from('assets')
-                    .select('*, parent:part_of_id(id, name, serial_number, brand, assigned_to)')
-                    .eq('id', assetId)
-                    .single();
-
-                if (fetchErr) throw fetchErr;
-
-                // Format dates for input type="date"
-                if (asset.purchase_date) asset.purchase_date = asset.purchase_date.split('T')[0];
-                if (asset.warranty_expiry) asset.warranty_expiry = asset.warranty_expiry.split('T')[0];
-
-                const parent = Array.isArray(asset.parent) ? asset.parent[0] : asset.parent;
-                setFormData({
-                    serial_number: asset.serial_number || '',
-                    name: asset.name || '',
-                    brand: asset.brand || '',
-                    model: asset.model || '',
-                    specs: asset.specs || '',
-                    photo_url: asset.photo_url || '',
-                    purchase_date: asset.purchase_date || '',
-                    warranty_expiry: asset.warranty_expiry || '',
-                    part_of_id: asset.part_of_id || '',
-                    part_of_name: parent?.name || '',
-                    part_of_brand: parent?.brand || '',
-                    part_of_serial: parent?.serial_number || '',
-                    part_of_owner: parent?.assigned_to || ''
-                });
-                setOriginalAsset(asset);
-            }
+            const parent = Array.isArray(asset.parent) ? asset.parent[0] : asset.parent;
+            setFormData({
+                serial_number: asset.serial_number || '',
+                name: asset.name || '',
+                brand: asset.brand || '',
+                model: asset.model || '',
+                specs: asset.specs || '',
+                photo_url: asset.photo_url || '',
+                purchase_date: asset.purchase_date || '',
+                warranty_expiry: asset.warranty_expiry || '',
+                part_of_id: asset.part_of_id || '',
+                part_of_name: parent?.name || '',
+                part_of_brand: parent?.brand || '',
+                part_of_serial: parent?.serial_number || '',
+                part_of_owner: parent?.assigned_to || ''
+            });
+            setOriginalAsset(asset);
         } catch (err) {
             setError(err.message || 'Failed to load asset details.');
-            if (err?.response?.status === 401 || err?.message?.includes('JWT')) navigate('/login');
+            if (err?.response?.status === 401 || err?.message?.includes('JWT') || err?.status === 401) navigate('/login');
         } finally {
             setLoading(false);
         }
@@ -139,17 +101,8 @@ function AssetDetailsPage() {
 
     const fetchSubAssets = useCallback(async () => {
         try {
-            if (import.meta.env.VITE_APP_ENV === 'local') {
-                const { data } = await apiLocal.get(`/api/assets/${assetId}/children`);
-                setSubAssets(data);
-            } else {
-                const { data, error } = await supabase
-                    .from('assets')
-                    .select('*')
-                    .eq('part_of_id', assetId);
-                if (error) throw error;
-                setSubAssets(data);
-            }
+            const data = await dataService.getAssetChildren(assetId);
+            setSubAssets(data);
         } catch (err) {
             console.error('Failed to fetch sub-assets:', err);
         }
@@ -172,27 +125,14 @@ function AssetDetailsPage() {
         setError('');
 
         try {
-            if (import.meta.env.VITE_APP_ENV === 'local') {
-                const { error: updErr } = await apiLocal.put(`/api/assets/${assetId}`, {
-                    ...formData
-                });
-                if (updErr) throw updErr;
+            await dataService.updateAsset(assetId, { 
+                ...formData, 
+                updated_by: user?.name || 'User' 
+            });
 
-                setSnackbar({ open: true, message: 'Asset updated successfully!', severity: 'success' });
-                setIsEditing(false);
-                fetchAssetDetails();
-            } else {
-                const { error: updErr } = await supabase
-                    .from('assets')
-                    .update({ ...formData, updated_by: user?.name || 'User' })
-                    .eq('id', assetId);
-
-                if (updErr) throw updErr;
-
-                setSnackbar({ open: true, message: 'Asset updated successfully!', severity: 'success' });
-                setIsEditing(false);
-                fetchAssetDetails(); // Refresh to catch updated_by etc if needed
-            }
+            setSnackbar({ open: true, message: 'Asset updated successfully!', severity: 'success' });
+            setIsEditing(false);
+            fetchAssetDetails();
         } catch (err) {
             if (err.response && err.response.data && err.response.data.error) {
                 setError(err.response.data.error);

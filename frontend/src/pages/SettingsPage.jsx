@@ -11,7 +11,7 @@ import {
     Security as SecurityIcon,
     ExpandMore as ExpandMoreIcon
 } from '@mui/icons-material';
-import apiLocal from '../apiLocal';
+import { dataService } from '../utils/dataService';
 import { usePermissions } from '../PermissionsContext';
 import PageContainer from '../components/PageContainer';
 import PageHeader from '../components/PageHeader';
@@ -52,16 +52,25 @@ function SettingsPage() {
     const fetchData = async () => {
         try {
             setLoading(true);
+
             const [empRes, setRes, permRes] = await Promise.all([
-                apiLocal.get('/api/employees'),
-                apiLocal.get('/api/settings'),
-                apiLocal.get('/api/role-permissions').catch(() => ({ data: [] }))
+                dataService.getEmployees({ rowsPerPage: 1000 }),
+                dataService.getSettings(),
+                dataService.getRolePermissions()
             ]);
-            setEmployees(empRes.data || []);
-            setSettings({
-                it_user_id: setRes.data.it_user_id || '',
-                ga_user_id: setRes.data.ga_user_id || ''
-            });
+
+            const empData = empRes.data || [];
+            const permData = permRes || [];
+            
+            const settingsMap = {};
+            (setRes || []).forEach(s => { settingsMap[s.key] = s.value; });
+            const setData = {
+                it_user_id: settingsMap.it_user_id || '',
+                ga_user_id: settingsMap.ga_user_id || ''
+            };
+
+            setEmployees(empData);
+            setSettings(setData);
 
             // Build permissions state from API data
             const permMap = {};
@@ -72,8 +81,8 @@ function SettingsPage() {
                 }
             }
             // Fill in from API
-            if (Array.isArray(permRes.data)) {
-                for (const p of permRes.data) {
+            if (Array.isArray(permData)) {
+                for (const p of permData) {
                     if (permMap[p.role_name] && permMap[p.role_name][p.menu_key]) {
                         permMap[p.role_name][p.menu_key] = {
                             can_view: p.can_view || false,
@@ -94,7 +103,7 @@ function SettingsPage() {
         setSaving(true);
         setError('');
         try {
-            await apiLocal.post('/api/settings', { settings });
+            await dataService.updateSettings(settings);
             setSnackbar({ open: true, message: 'Settings saved successfully!', severity: 'success' });
         } catch (err) {
             setError('Failed to save settings: ' + err.message);
@@ -134,11 +143,13 @@ function SettingsPage() {
                     });
                 }
             }
-            await apiLocal.post('/api/role-permissions', { permissions: permsArray });
+
+            await dataService.updateRolePermissions(permsArray);
+
             await refreshPermissions();
             setSnackbar({ open: true, message: 'Role permissions saved successfully!', severity: 'success' });
         } catch (err) {
-            setSnackbar({ open: true, message: err.response?.data?.error || 'Failed to save permissions.', severity: 'error' });
+            setSnackbar({ open: true, message: err.response?.data?.error || err.message || 'Failed to save permissions.', severity: 'error' });
         } finally {
             setSavingPerms(false);
         }

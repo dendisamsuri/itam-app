@@ -1,7 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import apiLocal from './apiLocal';
-import { supabase } from './supabaseClient';
-import { getUserPayload } from './utils/auth';
+import { dataService } from './utils/dataService';
 
 const PermissionsContext = createContext();
 
@@ -22,31 +20,14 @@ export function PermissionsProvider({ children }) {
         }
 
         try {
-            const user = await getUserPayload();
+            const user = await dataService.getUserPayload();
             if (!user) {
                 setLoaded(true);
                 return;
             }
             setUserRole(user.role);
 
-            let allPermissions = [];
-            const isLocal = import.meta.env.VITE_APP_ENV === 'local';
-
-            if (isLocal) {
-                // Local mode: fetch from backend API
-                const { data } = await apiLocal.get('/api/role-permissions');
-                allPermissions = data;
-            } else {
-                // Supabase mode: query role_permissions table directly
-                const { data, error } = await supabase
-                    .from('role_permissions')
-                    .select('*')
-                    .order('role_name');
-                if (!error && data) {
-                    allPermissions = data;
-                }
-            }
-
+            const allPermissions = await dataService.getRolePermissions();
             const permMap = {};
             if (Array.isArray(allPermissions)) {
                 for (const p of allPermissions) {

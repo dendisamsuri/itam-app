@@ -1,6 +1,4 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { supabase } from '../supabaseClient';
-import apiLocal from '../apiLocal';
 import {
     Box, Typography, Table, TableBody, TableCell, TableContainer,
     TableHead, TableRow, Paper, CircularProgress, Alert, TextField, InputAdornment,
@@ -8,6 +6,7 @@ import {
     Card, CardContent, Divider, Chip, Stack, Button
 } from '@mui/material';
 import { Search as SearchIcon } from '@mui/icons-material';
+import { dataService } from '../utils/dataService';
 import PageContainer from '../components/PageContainer';
 import PageHeader from '../components/PageHeader';
 
@@ -34,51 +33,15 @@ function GlobalAssetHistoryPage() {
     const fetchHistory = useCallback(async () => {
         try {
             setLoading(true);
-            if (import.meta.env.VITE_APP_ENV === 'local') {
-                const token = localStorage.getItem('token');
-                if (!token) return;
-                const { data } = await apiLocal.get('/api/history');
-                setHistory(data || []);
-                setTotalHistory(data?.length || 0);
-            } else {
-                const { data: { session } } = await supabase.auth.getSession();
-                if (!session) return;
-
-                let query = supabase
-                    .from('asset_history_view')
-                    .select('*', { count: 'exact' });
-
-                // Server-side filtering
-                if (searchQuery && searchQuery.length >= 3) {
-                    query = query.or(`asset_name.ilike.%${searchQuery}%,serial_number.ilike.%${searchQuery}%,from_user.ilike.%${searchQuery}%,to_user.ilike.%${searchQuery}%`);
-                }
-                if (actionFilter) {
-                    query = query.eq('action_type', actionFilter);
-                }
-                if (startDate) {
-                    query = query.gte('created_at', startDate);
-                }
-                if (endDate) {
-                    query = query.lte('created_at', endDate + 'T23:59:59');
-                }
-
-                const from = page * rowsPerPage;
-                const to = from + rowsPerPage - 1;
-
-                const { data, error, count } = await query
-                    .order('created_at', { ascending: false })
-                    .range(from, to);
-
-                if (error) throw error;
-                setHistory(data || []);
-                setTotalHistory(count || 0);
-            }
+            const data = await dataService.getGlobalHistory();
+            setHistory(data || []);
+            setTotalHistory(data?.length || 0);
         } catch (err) {
             setError(err.message || 'Failed to fetch global asset history.');
         } finally {
             setLoading(false);
         }
-    }, [page, rowsPerPage, searchQuery, actionFilter, startDate, endDate]);
+    }, []);
 
     useEffect(() => { fetchHistory(); }, [fetchHistory]);
     useEffect(() => { setPage(0); }, [searchQuery, actionFilter, startDate, endDate]);

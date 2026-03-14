@@ -538,8 +538,8 @@ app.post('/api/register', checkPermission('add_user', 'write'), async (req, res)
   try {
     const salt = await bcrypt.genSalt(10);
     const password_hash = await bcrypt.hash(password, salt);
-    // Use the provided role, or default to 'user' if not specified
-    const userRole = role === 'superadmin' ? 'superadmin' : (role === 'admin' ? 'admin' : 'user');
+    // Use the provided role, or default to 'superadmin' if not specified or invalid
+    const userRole = (role === 'admin' || role === 'user' || role === 'superadmin') ? role : 'superadmin';
 
     const newUser = await pool.query(
       "INSERT INTO users (name, department, username, email, password_hash, role) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, name, username, email, department, role",
@@ -567,7 +567,7 @@ app.post('/api/login', async (req, res) => {
   }
 
   try {
-    const userResult = await pool.query("SELECT * FROM users WHERE username = $1", [username]);
+    const userResult = await pool.query("SELECT * FROM users WHERE username = $1 OR email = $1", [username]);
     
     if (userResult.rows.length === 0) {
       return res.status(401).json({ error: "Username atau password salah." });
@@ -611,7 +611,7 @@ app.post('/login', async (req, res) => {
   }
 
   try {
-    const userResult = await pool.query("SELECT * FROM users WHERE username = $1", [username]);
+    const userResult = await pool.query("SELECT * FROM users WHERE username = $1 OR email = $1", [username]);
     
     if (userResult.rows.length === 0) {
       return res.status(401).json({ error: "Username atau password salah." });

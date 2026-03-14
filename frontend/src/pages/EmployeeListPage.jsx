@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../supabaseClient';
-import apiLocal from '../apiLocal';
+import { useNavigate } from 'react-router-dom';
+import { dataService } from '../utils/dataService';
 import {
     Box, Typography, Card, CardContent, Table, TableBody, TableCell, TableContainer,
     TableHead, TableRow, Paper, CircularProgress, Alert, Button, Dialog, DialogTitle,
@@ -14,13 +14,10 @@ import {
     Edit as EditIcon,
     Search as SearchIcon
 } from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
 import { getUserPayload } from '../utils/auth.js';
 import PageContainer from '../components/PageContainer';
 import PageHeader from '../components/PageHeader';
 import { usePermissions } from '../PermissionsContext';
-
-
 
 function EmployeeListPage() {
     const theme = useTheme();
@@ -63,28 +60,15 @@ function EmployeeListPage() {
             return;
         }
         try {
-            if (import.meta.env.VITE_APP_ENV === 'local') {
-                await apiLocal.post('/api/employees', {
-                    name: addFormData.name,
-                    department: addFormData.department || null,
-                    email: addFormData.email || null
-                });
+            await dataService.createEmployee({
+                name: addFormData.name,
+                department: addFormData.department || null,
+                email: addFormData.email || null
+            });
 
-                setSnackbar({ open: true, message: 'Employee added successfully!' });
-                setOpenAddDialog(false);
-                fetchEmployees();
-            } else {
-                const { error } = await supabase.from('employees').insert({
-                    name: addFormData.name,
-                    department: addFormData.department || null,
-                    email: addFormData.email || null
-                });
-                if (error) throw error;
-
-                setSnackbar({ open: true, message: 'Employee added successfully!' });
-                setOpenAddDialog(false);
-                fetchEmployees();
-            }
+            setSnackbar({ open: true, message: 'Employee added successfully!' });
+            setOpenAddDialog(false);
+            fetchEmployees();
         } catch (err) {
             if (err.response && err.response.data && err.response.data.error) {
                 setAddError(err.response.data.error);
@@ -111,23 +95,11 @@ function EmployeeListPage() {
             return;
         }
         try {
-            if (import.meta.env.VITE_APP_ENV === 'local') {
-                await apiLocal.put(`/api/employees/${editFormData.id}`, {
-                    name: editFormData.name,
-                    department: editFormData.department || null,
-                    email: editFormData.email || null
-                });
-            } else {
-                const { error } = await supabase
-                    .from('employees')
-                    .update({
-                        name: editFormData.name,
-                        department: editFormData.department || null,
-                        email: editFormData.email || null
-                    })
-                    .eq('id', editFormData.id);
-                if (error) throw error;
-            }
+            await dataService.updateEmployee(editFormData.id, {
+                name: editFormData.name,
+                department: editFormData.department || null,
+                email: editFormData.email || null
+            });
 
             setSnackbar({ open: true, message: 'Employee updated successfully!' });
             setOpenEditDialog(false);
@@ -144,53 +116,17 @@ function EmployeeListPage() {
     const fetchEmployees = useCallback(async () => {
         try {
             setLoading(true);
-            if (import.meta.env.VITE_APP_ENV === 'local') {
-                const token = localStorage.getItem('token');
-                if (!token) { navigate('/login'); return; }
+            const { data, count } = await dataService.getEmployees({
+                searchQuery,
+                page,
+                rowsPerPage
+            });
 
-                const { data } = await apiLocal.get('/api/employees');
-                let result = data || [];
-
-                if (searchQuery) {
-                    const lowerQuery = searchQuery.toLowerCase();
-                    result = result.filter(emp =>
-                        (emp.name && emp.name.toLowerCase().includes(lowerQuery)) ||
-                        (emp.department && emp.department.toLowerCase().includes(lowerQuery)) ||
-                        (emp.email && emp.email.toLowerCase().includes(lowerQuery))
-                    );
-                }
-
-                setTotalEmployees(result.length);
-
-                const from = page * rowsPerPage;
-                const to = from + rowsPerPage;
-                setEmployees(result.slice(from, to));
-            } else {
-                const { data: { session } } = await supabase.auth.getSession();
-                if (!session) { navigate('/login'); return; }
-
-                let query = supabase
-                    .from('employees')
-                    .select('id, name, department, email', { count: 'exact' });
-
-                if (searchQuery) {
-                    query = query.or(`name.ilike.%${searchQuery}%,department.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`);
-                }
-
-                const from = page * rowsPerPage;
-                const to = from + rowsPerPage - 1;
-
-                const { data, error: fetchErr, count } = await query
-                    .order('name', { ascending: true })
-                    .range(from, to);
-
-                if (fetchErr) throw fetchErr;
-                setEmployees(data || []);
-                setTotalEmployees(count || 0);
-            }
+            setEmployees(data || []);
+            setTotalEmployees(count || 0);
         } catch (err) {
             setError(err.message || 'Failed to fetch employees.');
-            if (err?.response?.status === 401 || err?.message?.includes('JWT')) navigate('/login');
+            if (err?.response?.status === 401 || err?.message?.includes('JWT') || err?.status === 401) navigate('/login');
         } finally {
             setLoading(false);
         }

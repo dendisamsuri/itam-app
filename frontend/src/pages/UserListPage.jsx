@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import apiLocal from '../apiLocal';
-import { supabase } from '../supabaseClient';
+import { useNavigate } from 'react-router-dom';
+import { dataService } from '../utils/dataService';
 import {
     Box, Typography, Card, CardContent, Table, TableBody, TableCell, TableContainer,
     TableHead, TableRow, Paper, CircularProgress, Alert, Button, Dialog, DialogTitle,
@@ -16,7 +16,6 @@ import {
     Edit as EditIcon,
     Delete as DeleteIcon
 } from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
 import { getUserPayload } from '../utils/auth.js';
 import PageContainer from '../components/PageContainer';
 import PageHeader from '../components/PageHeader';
@@ -64,29 +63,8 @@ function UserListPage() {
     const fetchUsers = useCallback(async () => {
         try {
             setLoading(true);
-
-            if (isLocal) {
-                const token = localStorage.getItem('token');
-                if (!token) { navigate('/login'); return; }
-                const { data } = await apiLocal.get('/api/users');
-                setUsers(data || []);
-            } else {
-                const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-                if (sessionError || !session) { 
-                    console.error("Session error or missing:", sessionError);
-                    navigate('/login'); 
-                    return; 
-                }
-
-                const { data, error: fetchErr } = await supabase
-                    .from('users')
-                    .select('id, name, email, department, role')
-                    .is('deleted_at', null)
-                    .order('name');
-
-                if (fetchErr) throw fetchErr;
-                setUsers(data || []);
-            }
+            const data = await dataService.getUsers();
+            setUsers(data || []);
         } catch (err) {
             console.error("fetchUsers error:", err);
             setError(err.message || 'Failed to fetch users.');
@@ -127,15 +105,7 @@ function UserListPage() {
 
         try {
             setResetLoading(true);
-            if (isLocal) {
-                await apiLocal.put(`/api/users/${selectedUser.id}/reset-password`, {
-                    new_password: newPassword
-                });
-            } else {
-                // In Supabase mode, password reset requires admin API (service_role key)
-                // This is not available from the frontend, so we show a warning
-                throw new Error('Password reset for other users is not available in production mode. Users can reset their own password via "Forgot Password".');
-            }
+            await dataService.resetPassword(selectedUser.id, newPassword);
             setSnackbar({ open: true, message: `Password for ${selectedUser.name} has been reset successfully!`, severity: 'success' });
             setResetDialogOpen(false);
         } catch (err) {
@@ -165,20 +135,7 @@ function UserListPage() {
 
         try {
             setEditLoading(true);
-            if (isLocal) {
-                await apiLocal.put(`/api/users/${selectedUser.id}`, editForm);
-            } else {
-                const { error: updErr } = await supabase
-                    .from('users')
-                    .update({
-                        name: editForm.name,
-                        department: editForm.department || null,
-                        email: editForm.email || null,
-                        role: editForm.role
-                    })
-                    .eq('id', selectedUser.id);
-                if (updErr) throw updErr;
-            }
+            await dataService.updateUser(selectedUser.id, editForm);
             setSnackbar({ open: true, message: `User ${selectedUser.name} berhasil diupdate!`, severity: 'success' });
             setEditDialogOpen(false);
             fetchUsers();
@@ -198,15 +155,7 @@ function UserListPage() {
     const handleDeleteConfirm = async () => {
         try {
             setDeleteLoading(true);
-            if (isLocal) {
-                await apiLocal.delete(`/api/users/${selectedUser.id}`);
-            } else {
-                const { error: delErr } = await supabase
-                    .from('users')
-                    .update({ deleted_at: new Date().toISOString() })
-                    .eq('id', selectedUser.id);
-                if (delErr) throw delErr;
-            }
+            await dataService.deleteUser(selectedUser.id);
             setSnackbar({ open: true, message: `User ${selectedUser.name} berhasil dihapus.`, severity: 'success' });
             setDeleteDialogOpen(false);
             fetchUsers();

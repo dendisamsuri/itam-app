@@ -1,7 +1,5 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../supabaseClient';
-import apiLocal from '../apiLocal';
 import {
   Box, Typography, TextField, Button, Alert,
   InputAdornment, IconButton, CircularProgress, Paper
@@ -11,6 +9,7 @@ import {
   Inventory2Outlined as InventoryIcon,
   LockOutlined as LockIcon
 } from '@mui/icons-material';
+import { dataService } from '../utils/dataService';
 
 function LoginPage() {
   const [username, setUsername] = useState('');
@@ -25,27 +24,9 @@ function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      if (import.meta.env.VITE_APP_ENV === 'local') {
-        const { data } = await apiLocal.post('/api/login', {
-          username,
-          password
-        });
-        localStorage.setItem('token', data.token);
-        navigate('/');
-      } else {
-        const email = username.includes('@') ? username : `${username}@itam.local`;
-        const { data, error: authError } = await supabase.auth.signInWithPassword({
-          email: email,
-          password: password
-        });
-
-        if (authError) throw authError;
-
-        if (data.session) {
-          localStorage.setItem('token', data.session.access_token);
-          navigate('/');
-        }
-      }
+      const { error: loginError } = await dataService.login(username, password);
+      if (loginError) throw loginError;
+      navigate('/');
     } catch (err) {
       if (err.response && err.response.data && err.response.data.error) {
         setError(err.response.data.error);

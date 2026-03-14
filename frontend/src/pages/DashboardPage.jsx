@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../supabaseClient';
-import apiLocal from '../apiLocal';
+import { dataService } from '../utils/dataService';
 import {
     Box, Typography, Paper, Grid, TextField, InputAdornment, Button, MenuItem, Stack, Card, CardContent, Skeleton,
     Chip, TableContainer, Table, TableHead, TableRow, TableCell,
@@ -68,58 +67,23 @@ function DashboardPage() {
     const fetchAssets = useCallback(async () => {
         try {
             setLoading(true);
-            if (import.meta.env.VITE_APP_ENV === 'local') {
-                const token = localStorage.getItem('token');
-                if (!token) { navigate('/login'); return; }
-                const { data } = await apiLocal.get('/api/assets');
-                setAssets(data || []);
-                setTotalCount(data?.length || 0);
-            } else {
-                const { data: { session } } = await supabase.auth.getSession();
-                if (!session) { navigate('/login'); return; }
+            const { data, count } = await dataService.getAssets({
+                searchQuery,
+                statusFilter,
+                userFilter,
+                page,
+                rowsPerPage
+            });
 
-                let query = supabase
-                    .from('assets')
-                    .select('id, serial_number, name, brand, model, photo_url, status, assigned_to, assigned_to_id, part_of_id', { count: 'exact' });
-
-                // Server-side filtering
-                if (searchQuery && searchQuery.length >= 3) {
-                    query = query.or(`name.ilike.%${searchQuery}%,serial_number.ilike.%${searchQuery}%,brand.ilike.%${searchQuery}%`);
-                }
-                if (statusFilter) {
-                    query = query.eq('status', statusFilter);
-                }
-                if (userFilter) {
-                    query = query.ilike('assigned_to', `%${userFilter}%`);
-                }
-
-                const from = page * rowsPerPage;
-                const to = from + rowsPerPage - 1;
-
-                const { data, error, count } = await query
-                    .order('id', { ascending: false })
-                    .range(from, to);
-
-                if (error) throw error;
-
-                // Optimasi Gambar: Gunakan transformasi Supabase jika ada photo_url
-                const optimizedData = data.map(asset => {
-                    if (asset.photo_url && asset.photo_url.includes('storage/v1/object/public')) {
-                        // Asumsi menggunakan public bucket, tambahkan parameter transformasi
-                        // Contoh URL: https://[project].supabase.co/storage/v1/object/public/assets/image.jpg
-                        // Kita bisa menggunakan transform API jika diaktifkan di Supabase
-                        // Namun cara termudah untuk preview adalah menambahkan query params jika didukung atau 
-                        // menggunakan fetch with transform. Di sini kita asumsikan transformasi diaktifkan.
-                        // asset.photo_url = `${asset.photo_url}?width=100&height=100&resize=contain`;
-                    }
-                    return asset;
-                });
-
-                setAssets(optimizedData || []);
-                setTotalCount(count || 0);
-            }
+            setAssets(data || []);
+            setTotalCount(count || 0);
         } catch (err) {
-            if (err?.response?.status === 401 || err?.message?.includes('JWT')) navigate('/login');
+            console.error('fetchAssets error:', err);
+            if (err?.response?.status === 401 || err?.message?.includes('JWT') || err?.status === 401) {
+                navigate('/login');
+            } else {
+                setError('Failed to fetch assets: ' + (err.message || 'Unknown error'));
+            }
         } finally {
             setLoading(false);
         }
@@ -132,7 +96,6 @@ function DashboardPage() {
         let timer = null;
 
         if (isScanning) {
-            // Small delay to ensure the container "reader" is rendered and styled
             timer = setTimeout(() => {
                 import('html5-qrcode').then((module) => {
                     const ScannerClass = module.Html5QrcodeScanner;
@@ -155,10 +118,7 @@ function DashboardPage() {
     useEffect(() => { setPage(0); }, [searchQuery, statusFilter, userFilter]);
 
     const handleApplyFilters = () => {
-        if (tempSearchQuery && tempSearchQuery.length > 0 && tempSearchQuery.length < 3) {
-            // Don't apply filters if search is too short, but we could show a hint
-            return;
-        }
+        if (tempSearchQuery && tempSearchQuery.length > 0 && tempSearchQuery.length < 3) return;
         setSearchQuery(tempSearchQuery);
         setStatusFilter(tempStatusFilter);
         setUserFilter(tempUserFilter);
@@ -179,13 +139,8 @@ function DashboardPage() {
         const timer = setTimeout(async () => {
             if (autocompleteInputValue) {
                 try {
-                    if (import.meta.env.VITE_APP_ENV === 'local') {
-                        const { data } = await apiLocal.get(`/api/employees/search?q=${encodeURIComponent(autocompleteInputValue)}`);
-                        setEmployeeOptions(data || []);
-                    } else {
-                        const { data, error } = await supabase.from('employees').select('id, name, department, email').or(`name.ilike.%${autocompleteInputValue}%,email.ilike.%${autocompleteInputValue}%`).order('name');
-                        if (!error) setEmployeeOptions(data || []);
-                    }
+                    const data = await dataService.searchEmployees(autocompleteInputValue);
+                    setEmployeeOptions(data || []);
                 } catch { }
             } else { setEmployeeOptions([]); }
         }, 300);
@@ -194,21 +149,8 @@ function DashboardPage() {
 
     const handleOpenDialog = async (asset, type) => {
         try {
-            if (import.meta.env.VITE_APP_ENV === 'local') {
-                const { data } = await apiLocal.get(`/api/assets/${asset.id}`);
-                setSelectedAsset(data);
-            } else {
-                const { data, error } = await supabase
-                    .from('assets')
-                    .select(`
-            *,
-            parent:part_of_id(id, name, serial_number, assigned_to)
-          `)
-                    .eq('id', asset.id)
-                    .single();
-                if (error) throw error;
-                setSelectedAsset(data);
-            }
+            const data = await dataService.getAssetById(asset.id);
+            setSelectedAsset(data);
         } catch (err) {
             console.error('Failed to fetch full asset details:', err);
             setSelectedAsset(asset);
@@ -222,19 +164,11 @@ function DashboardPage() {
 
         if (type === 'HANDOVER') {
             try {
-                if (import.meta.env.VITE_APP_ENV === 'local') {
-                    const { data } = await apiLocal.get('/api/assets');
-                    setAllAssets(data.filter(a => a.id !== asset.id));
-                    
-                    const childResp = await apiLocal.get(`/api/assets/${asset.id}/children`);
-                    setChildAssets(childResp.data || []);
-                } else {
-                    const { data, error } = await supabase.from('assets').select('id, name, serial_number, brand, assigned_to, assigned_to_id').neq('id', asset.id);
-                    if (!error) setAllAssets(data);
-                    
-                    const { data: childData } = await supabase.from('assets').select('id, name, brand, serial_number').eq('part_of_id', asset.id);
-                    setChildAssets(childData || []);
-                }
+                const { data } = await dataService.getAssets({ rowsPerPage: 1000 });
+                setAllAssets(data.filter(a => a.id !== asset.id));
+                
+                const children = await dataService.getAssetChildren(asset.id);
+                setChildAssets(children || []);
             } catch (err) { console.error('Failed to fetch assets for handover:', err); }
         }
     };
@@ -251,7 +185,6 @@ function DashboardPage() {
                         setError(`Gagal: Aset induk (${parent.name}) belum diserahkan kepada siapapun. Silakan serahkan aset induk terlebih dahulu.`);
                         return;
                     }
-                    // Check by name or ID
                     const recipientId = selectedEmployee?.id;
                     const parentOwnerId = parent.assigned_to_id;
 
@@ -269,50 +202,17 @@ function DashboardPage() {
         }
         setError('');
         try {
-            if (import.meta.env.VITE_APP_ENV === 'local') {
-                await apiLocal.post(`/api/assets/${selectedAsset.id}/action`, {
-                    action_type: actionType,
-                    recipient_name: finalRecipientName,
-                    recipient_department: recipientDepartment,
-                    recipient_email: recipientEmail,
-                    notes: notes,
-                    part_of_id: handoverPartOfId || null,
-                    return_to: actionType === 'RETURN' ? returnTo : null
-                });
-                fetchAssets(); setOpen(false);
-            } else {
-                let to_user_id = null, to_user_name = null;
-                if (actionType === 'HANDOVER') {
-                    to_user_name = finalRecipientName;
-                    let { data: empData } = await supabase.from('employees').select('id').eq('name', to_user_name).maybeSingle();
-                    if (empData) {
-                        to_user_id = empData.id;
-                        if (recipientDepartment || recipientEmail) await supabase.from('employees').update({ department: recipientDepartment || null, email: recipientEmail || null }).eq('id', to_user_id);
-                    } else {
-                        const { data: newEmp, error: insErr } = await supabase.from('employees').insert({ name: to_user_name, department: recipientDepartment || null, email: recipientEmail || null }).select().single();
-                        if (insErr) throw insErr;
-                        to_user_id = newEmp.id;
-                    }
-                }
-
-                if (actionType === 'RETURN') {
-                    if (!returnTo) throw new Error("Return to (IT/GA) is required.");
-                    const settingKey = returnTo.toLowerCase() === 'it' ? 'it_user_id' : 'ga_user_id';
-                    const { data: setRes, error: setErr } = await supabase.from('settings').select('value').eq('key', settingKey).maybeSingle();
-                    if (setErr) throw setErr;
-                    if (!setRes || !setRes.value) throw new Error(`User for ${returnTo} is not configured.`);
-
-                    to_user_id = parseInt(setRes.value, 10);
-                    const { data: empData, error: empErr } = await supabase.from('employees').select('name').eq('id', to_user_id).single();
-                    if (empErr) throw empErr;
-                    to_user_name = empData.name;
-                }
-
-                const status = actionType === 'HANDOVER' ? 'In Use' : 'Ready';
-                await supabase.from('assets').update({ status, assigned_to: to_user_name, assigned_to_id: to_user_id, part_of_id: actionType === 'HANDOVER' ? (handoverPartOfId || null) : selectedAsset.part_of_id }).eq('id', selectedAsset.id);
-                await supabase.from('asset_history').insert({ asset_id: selectedAsset.id, action_type: actionType, from_user: selectedAsset.assigned_to, to_user: to_user_name, notes, from_user_id: selectedAsset.assigned_to_id, to_user_id: to_user_id });
-                fetchAssets(); setOpen(false);
-            }
+            await dataService.assetAction(selectedAsset.id, {
+                action_type: actionType,
+                recipient_name: finalRecipientName,
+                recipient_department: recipientDepartment,
+                recipient_email: recipientEmail,
+                notes: notes,
+                part_of_id: handoverPartOfId || null,
+                return_to: actionType === 'RETURN' ? returnTo : null,
+                current_asset: selectedAsset
+            });
+            fetchAssets(); setOpen(false);
         } catch (err) {
             setError(err.response?.data?.error || err.message || 'An error occurred.');
         }
@@ -333,37 +233,6 @@ function DashboardPage() {
         else handleOpenDialog(menuAsset, type);
         handleMenuClose();
     };
-
-    const filteredAssets = useMemo(() => {
-        if (import.meta.env.VITE_APP_ENV !== 'local') return assets;
-
-        return assets.filter(asset => {
-            const matchesSearch = !searchQuery || searchQuery.length < 3 ||
-                (asset.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                    asset.serial_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                    asset.brand?.toLowerCase().includes(searchQuery.toLowerCase()));
-
-            const matchesStatus = !statusFilter || asset.status === statusFilter;
-
-            const matchesUser = !userFilter ||
-                (asset.assigned_to?.toLowerCase().includes(userFilter.toLowerCase()));
-
-            return matchesSearch && matchesStatus && matchesUser;
-        });
-    }, [assets, searchQuery, statusFilter, userFilter]);
-
-    useEffect(() => {
-        if (import.meta.env.VITE_APP_ENV === 'local') {
-            setTotalCount(filteredAssets.length);
-        }
-    }, [filteredAssets]);
-
-    const paginatedAssets = useMemo(() => {
-        if (import.meta.env.VITE_APP_ENV !== 'local') return assets;
-        const from = page * rowsPerPage;
-        const to = from + rowsPerPage;
-        return filteredAssets.slice(from, to);
-    }, [filteredAssets, assets, page, rowsPerPage]);
 
     return (
         <PageContainer>
@@ -439,8 +308,8 @@ function DashboardPage() {
             {isMobile || isTablet ? (
                 <Grid container spacing={2}>
                     {loading ? [...Array(4)].map((_, i) => <Grid size={{ xs: 12, sm: 6 }} key={i}><Card variant="outlined"><CardContent><Skeleton height={30} /><Skeleton height={20} width="60%" /></CardContent></Card></Grid>) :
-                        filteredAssets.length === 0 ? <Grid size={12}><Paper variant="outlined" sx={{ py: 6, textAlign: 'center' }}><Typography color="text.secondary">No assets found</Typography></Paper></Grid> :
-                            paginatedAssets.map((asset) => (
+                        assets.length === 0 ? <Grid size={12}><Paper variant="outlined" sx={{ py: 6, textAlign: 'center' }}><Typography color="text.secondary">No assets found</Typography></Paper></Grid> :
+                            assets.map((asset) => (
                                 <Grid size={{ xs: 12, sm: 6 }} key={asset.id}>
                                     <Card variant="outlined" sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
                                         <CardContent sx={{ flexGrow: 1, pb: 1 }}>
@@ -479,8 +348,8 @@ function DashboardPage() {
                             </TableHead>
                             <TableBody>
                                 {loading ? [...Array(5)].map((_, i) => <TableRow key={i}><TableCell colSpan={5}><Skeleton height={40} /></TableCell></TableRow>) :
-                                    filteredAssets.length === 0 ? <TableRow><TableCell colSpan={5} align="center" sx={{ py: 4 }}>No assets found</TableCell></TableRow> :
-                                        paginatedAssets.map((asset) => (
+                                    assets.length === 0 ? <TableRow><TableCell colSpan={5} align="center" sx={{ py: 4 }}>No assets found</TableCell></TableRow> :
+                                        assets.map((asset) => (
                                             <TableRow key={asset.id} hover>
                                                 <TableCell><Typography variant="body2" fontFamily="monospace">{asset.serial_number}</Typography></TableCell>
                                                 <TableCell><Typography variant="body2" fontWeight={500}>{asset.name}</Typography><Typography variant="caption" color="text.secondary">{asset.brand}</Typography></TableCell>

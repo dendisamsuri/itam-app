@@ -1,7 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { supabase } from '../supabaseClient';
-import apiLocal from '../apiLocal';
 import {
   Paper, Typography, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Button, Box, Dialog, DialogActions,
@@ -17,6 +15,7 @@ import {
   CalendarTodayOutlined as CalendarIcon,
   StorefrontOutlined as VendorIcon
 } from '@mui/icons-material';
+import { dataService } from '../utils/dataService';
 import PageContainer from '../components/PageContainer';
 import PageHeader from '../components/PageHeader';
 import { usePermissions } from '../PermissionsContext';
@@ -58,48 +57,22 @@ function RepairHistoryPage() {
 
   const fetchRepairHistory = useCallback(async () => {
     try {
-      if (import.meta.env.VITE_APP_ENV === 'local') {
-        const token = localStorage.getItem('token');
-        if (!token) { navigate('/login'); return; }
+      setLoading(true);
+      const [assetData, repairData] = await Promise.all([
+        dataService.getAssetById(assetId),
+        dataService.getAssetRepairs(assetId, { page, rowsPerPage })
+      ]);
 
-        const { data } = await apiLocal.get(`/api/assets/${assetId}/repairs`);
-        setAsset(data.asset);
-        setRepairs(data.repairs || []);
-      } else {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) { navigate('/login'); return; }
-
-        // Fetch asset
-        const { data: assetData, error: assetErr } = await supabase
-          .from('assets')
-          .select('id, name, serial_number')
-          .eq('id', assetId)
-          .single();
-        if (assetErr) throw assetErr;
-        setAsset(assetData);
-
-        // Fetch repairs with pagination
-        const from = page * rowsPerPage;
-        const to = from + rowsPerPage - 1;
-
-        const { data: repairData, error: repairErr, count } = await supabase
-          .from('repair_logs')
-          .select('*', { count: 'exact' })
-          .eq('asset_id', assetId)
-          .order('repair_date', { ascending: false })
-          .range(from, to);
-
-        if (repairErr) throw repairErr;
-        setRepairs(repairData || []);
-        setTotalRepairs(count || 0);
-      }
+      setAsset(assetData.asset || assetData); // dataService might return asset directly or wrapped
+      setRepairs(repairData.repairs || repairData); // same for repairs
+      setTotalRepairs(repairData.count !== undefined ? repairData.count : (repairData.length || 0));
     } catch (err) {
       setPageError(err.message || 'Failed to load repair history.');
-      if (err?.response?.status === 401 || err?.message?.includes('JWT')) navigate('/login');
+      if (err?.response?.status === 401 || err?.message?.includes('JWT') || err?.status === 401) navigate('/login');
     } finally {
       setLoading(false);
     }
-  }, [assetId, navigate]);
+  }, [assetId, navigate, page, rowsPerPage]);
 
   useEffect(() => { fetchRepairHistory(); }, [fetchRepairHistory]);
 
@@ -124,49 +97,17 @@ function RepairHistoryPage() {
     setPage(0);
   };
 
-  const paginatedRepairs = useMemo(() => {
-    if (import.meta.env.VITE_APP_ENV !== 'local') return repairs;
-    const from = page * rowsPerPage;
-    const to = from + rowsPerPage;
-    return repairs.slice(from, to);
-  }, [repairs, page, rowsPerPage]);
-
-  useEffect(() => {
-    if (import.meta.env.VITE_APP_ENV === 'local') {
-      setTotalRepairs(repairs.length);
-    }
-  }, [repairs]);
-
   const handleAddRepair = async () => {
     if (!formData.fault_description || !formData.repair_details) {
       setFormError('Fault description and repair details are required.'); return;
     }
     setFormError('');
     try {
-      if (import.meta.env.VITE_APP_ENV === 'local') {
-        await apiLocal.post(`/api/assets/${assetId}/repairs`, {
-          ...formData
-        });
+      await dataService.createRepair(assetId, formData);
 
-        handleCloseDialog();
-        fetchRepairHistory();
-        setSnackbar({ open: true, message: '✅ Repair log added successfully!' });
-      } else {
-        const { error } = await supabase.from('repair_logs').insert({
-          ...formData,
-          asset_id: assetId,
-          completion_date: formData.completion_date || null
-        });
-        if (error) throw error;
-
-        if (formData.status === 'broken') {
-          await supabase.from('assets').update({ status: 'Broken' }).eq('id', assetId);
-        }
-
-        handleCloseDialog();
-        fetchRepairHistory();
-        setSnackbar({ open: true, message: '✅ Repair log added successfully!' });
-      }
+      handleCloseDialog();
+      fetchRepairHistory();
+      setSnackbar({ open: true, message: '✅ Repair log added successfully!' });
     } catch (err) {
       if (err.response && err.response.data && err.response.data.error) {
         setFormError(err.response.data.error);
@@ -212,7 +153,7 @@ function RepairHistoryPage() {
               <Typography color="text.secondary" fontWeight={500}>No repair history available</Typography>
             </Paper>
           ) : (
-            paginatedRepairs.map((repair) => (
+            repairs.map((repair) => (
               <Card key={repair.id} sx={{
                 borderRadius: 3,
                 border: 'none',
@@ -304,7 +245,7 @@ function RepairHistoryPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  paginatedRepairs.map((repair) => (
+                  repairs.map((repair) => (
                     <TableRow key={repair.id} hover sx={{ '&:last-child td': { border: 0 } }}>
                       <TableCell sx={{ py: 2 }}><Typography variant="body2" fontWeight={600} color="text.primary">{repair.fault_description}</Typography></TableCell>
                       <TableCell sx={{ py: 2 }}><Typography variant="body2" color="text.secondary">{repair.repair_details}</Typography></TableCell>

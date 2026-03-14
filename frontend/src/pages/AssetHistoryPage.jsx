@@ -1,6 +1,4 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../supabaseClient';
-import apiLocal from '../apiLocal';
 import {
     Box, Typography, Card, CardContent, Table, TableBody, TableCell,
     TableContainer, TableHead, TableRow, Paper, CircularProgress, Alert,
@@ -19,6 +17,7 @@ import {
     History as HistoryIcon,
 } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
+import { dataService } from '../utils/dataService';
 import PageContainer from '../components/PageContainer';
 import PageHeader from '../components/PageHeader';
 
@@ -72,7 +71,7 @@ function HistoryCard({ log, formatDate }) {
                         {formatDate(log.created_at, true)}
                     </Typography>
                 </Stack>
-
++
                 <Box mb={1.25}>
                     <Chip icon={cfg.icon} label={cfg.label} color={cfg.color} size="small"
                         sx={{ fontWeight: 700, fontSize: '0.7rem', height: 24 }} />
@@ -131,67 +130,24 @@ export default function AssetHistoryPage() {
     const fetchHistory = useCallback(async () => {
         setLoading(true);
         try {
-            if (import.meta.env.VITE_APP_ENV === 'local') {
-                const token = localStorage.getItem('token');
-                if (!token) { navigate('/login'); return; }
-                const { data } = await apiLocal.get(`/api/assets/${assetId}/history`);
-                setAsset(data.asset);
-                setHistory((data.history || []).map(h => ({
-                    ...h,
-                    asset_name: data.asset?.name,
-                    serial_number: data.asset?.serial_number,
-                })));
-                setTotalHistory(data.history?.length || 0);
-            } else {
-                const { data: { session } } = await supabase.auth.getSession();
-                if (!session) { navigate('/login'); return; }
+            const data = await dataService.getAssetHistory(assetId);
+            const historyList = data.history || [];
+            const assetInfo = data.asset || null;
 
-                // Get Asset Info
-                const { data: assetData } = await supabase.from('assets').select('name, serial_number').eq('id', assetId).single();
-                setAsset(assetData);
-
-                let query = supabase
-                    .from('asset_history')
-                    .select('id, action_type, from_user, to_user, notes, created_at', { count: 'exact' })
-                    .eq('asset_id', assetId);
-
-                // Server-side filtering
-                if (actionFilter) {
-                    query = query.eq('action_type', actionFilter);
-                }
-                if (startDate) {
-                    query = query.gte('created_at', startDate);
-                }
-                if (endDate) {
-                    query = query.lte('created_at', endDate + 'T23:59:59');
-                }
-                // Search filter (limited support for multi-column search in standard query, but we can try)
-                if (search && search.length >= 3) {
-                    query = query.or(`from_user.ilike.%${search}%,to_user.ilike.%${search}%,notes.ilike.%${search}%`);
-                }
-
-                const from = page * rowsPerPage;
-                const to = from + rowsPerPage - 1;
-
-                const { data, error: err, count } = await query
-                    .order('created_at', { ascending: false })
-                    .range(from, to);
-
-                if (err) throw err;
-                setHistory((data || []).map(h => ({
-                    ...h,
-                    asset_name: assetData?.name,
-                    serial_number: assetData?.serial_number,
-                })));
-                setTotalHistory(count || 0);
-            }
+            setAsset(assetInfo);
+            setHistory(historyList.map(h => ({
+                ...h,
+                asset_name: assetInfo?.name,
+                serial_number: assetInfo?.serial_number,
+            })));
+            setTotalHistory(historyList.length);
         } catch (err) {
             setError(err.message || 'Gagal memuat data.');
-            if (err?.response?.status === 401 || err?.message?.includes('JWT')) navigate('/login');
+            if (err?.response?.status === 401 || err?.message?.includes('JWT') || err?.status === 401) navigate('/login');
         } finally {
             setLoading(false);
         }
-    }, [assetId, navigate, page, rowsPerPage, actionFilter, startDate, endDate, search]);
+    }, [assetId, navigate]);
 
     useEffect(() => { fetchHistory(); }, [fetchHistory]);
 

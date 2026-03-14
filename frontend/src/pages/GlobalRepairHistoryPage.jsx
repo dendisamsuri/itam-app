@@ -1,6 +1,4 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { supabase } from '../supabaseClient';
-import apiLocal from '../apiLocal';
 import {
     Box, Typography, Card, CardContent, Table, TableBody, TableCell, TableContainer,
     TableHead, TableRow, Paper, CircularProgress, Alert, TextField, InputAdornment,
@@ -8,6 +6,7 @@ import {
     useTheme, useMediaQuery, Stack, Divider, Button
 } from '@mui/material';
 import { Search as SearchIcon, BuildOutlined as BuildIcon } from '@mui/icons-material';
+import { dataService } from '../utils/dataService';
 import PageContainer from '../components/PageContainer';
 import PageHeader from '../components/PageHeader';
 
@@ -42,24 +41,9 @@ function GlobalRepairHistoryPage() {
 
     const fetchRepairs = useCallback(async () => {
         try {
-            if (import.meta.env.VITE_APP_ENV === 'local') {
-                const token = localStorage.getItem('token');
-                if (!token) return;
-
-                const { data } = await apiLocal.get('/api/repairs');
-                setRepairs(data || []);
-            } else {
-                const { data: { session } } = await supabase.auth.getSession();
-                if (!session) return;
-
-                const { data, error } = await supabase
-                    .from('repair_logs_view')
-                    .select('*')
-                    .order('repair_date', { ascending: false });
-
-                if (error) throw error;
-                setRepairs(data || []);
-            }
+            setLoading(true);
+            const data = await dataService.getGlobalRepairs();
+            setRepairs(data || []);
         } catch (err) {
             setError(err.message || 'Failed to fetch global repair history.');
         } finally {

@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Barcode from 'react-barcode';
-import { supabase } from '../supabaseClient';
-import apiLocal from '../apiLocal';
+import { dataService } from '../utils/dataService';
 import {
   Paper, Typography, TextField, Button, Box, Grid, Alert,
   InputAdornment, Snackbar, Autocomplete
@@ -29,25 +28,18 @@ function AddAssetPage() {
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const isLocal = import.meta.env.VITE_APP_ENV === 'local';
 
   useEffect(() => {
     const fetchAssets = async () => {
       try {
-        if (isLocal) {
-          const { data } = await apiLocal.get('/api/assets');
-          setAssets(data);
-        } else {
-          const { data, error } = await supabase.from('assets').select('id, name, serial_number, brand');
-          if (error) throw error;
-          setAssets(data);
-        }
+        const { data } = await dataService.getAssets({ rowsPerPage: 1000 });
+        setAssets(data || []);
       } catch (err) {
         console.error('Error fetching assets:', err);
       }
     };
     fetchAssets();
-  }, [isLocal]);
+  }, []);
 
   const handleInputChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
@@ -63,17 +55,8 @@ function AddAssetPage() {
         part_of_id: formData.part_of_id || null
       };
 
-      if (isLocal) {
-        await apiLocal.post('/api/assets', payload);
-      } else {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error("Not authenticated");
-        payload.created_by = user.user_metadata?.name || 'User';
-        payload.updated_by = payload.created_by;
-        payload.status = 'Ready';
-        const { error } = await supabase.from('assets').insert(payload);
-        if (error) throw error;
-      }
+      await dataService.createAsset(payload);
+      
       setSnackbar({ open: true, message: `✅ Asset created successfully!`, severity: 'success' });
       setTimeout(() => navigate('/'), 1500);
     } catch (error) {

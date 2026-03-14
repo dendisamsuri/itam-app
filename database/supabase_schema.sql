@@ -140,14 +140,23 @@ CREATE POLICY "Allow authenticated update" ON role_permissions FOR UPDATE TO aut
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
 BEGIN
+  -- Insert profile into public.users
   INSERT INTO public.users (id, name, department, role, email)
   VALUES (
     new.id, 
     COALESCE(new.raw_user_meta_data->>'name', 'User'), 
     new.raw_user_meta_data->>'department',
-    COALESCE(new.raw_user_meta_data->>'role', 'user'),
+    COALESCE(new.raw_user_meta_data->>'role', 'superadmin'),
     new.email
   );
+
+  -- Sync role to auth.users metadata (important for Supabase JWT)
+  UPDATE auth.users 
+  SET raw_user_meta_data = 
+    COALESCE(raw_user_meta_data, '{}'::jsonb) || 
+    jsonb_build_object('role', COALESCE(new.raw_user_meta_data->>'role', 'superadmin'))
+  WHERE id = new.id;
+
   RETURN new;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -159,6 +168,40 @@ DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
+
+-- Seed role_permissions table with default data (All roles get full access)
+INSERT INTO role_permissions (role_name, menu_key, can_view, can_write) VALUES
+-- Superadmin
+('superadmin', 'user_list', true, true),
+('superadmin', 'employee_list', true, true),
+('superadmin', 'asset_list', true, true),
+('superadmin', 'add_asset', true, true),
+('superadmin', 'asset_history', true, true),
+('superadmin', 'repair_history', true, true),
+('superadmin', 'settings', true, true),
+('superadmin', 'add_user', true, true),
+
+-- Admin
+('admin', 'user_list', true, true),
+('admin', 'employee_list', true, true),
+('admin', 'asset_list', true, true),
+('admin', 'add_asset', true, true),
+('admin', 'asset_history', true, true),
+('admin', 'repair_history', true, true),
+('admin', 'settings', true, true),
+('admin', 'add_user', true, true),
+
+-- User
+('user', 'user_list', true, true),
+('user', 'employee_list', true, true),
+('user', 'asset_list', true, true),
+('user', 'add_asset', true, true),
+('user', 'asset_history', true, true),
+('user', 'repair_history', true, true),
+('user', 'settings', true, true),
+('user', 'add_user', true, true)
+ON CONFLICT (role_name, menu_key) DO UPDATE 
+SET can_view = EXCLUDED.can_view, can_write = EXCLUDED.can_write;
 
 -- Create a View for Assets History to join with Assets table easily (useful for frontend fetching)
 CREATE OR REPLACE VIEW asset_history_view AS
