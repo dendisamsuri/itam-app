@@ -12,10 +12,11 @@ export function PermissionsProvider({ children }) {
     const [loaded, setLoaded] = useState(false);
 
     const fetchPermissions = useCallback(async () => {
+        const isLocal = import.meta.env.VITE_APP_ENV === 'local';
         const token = localStorage.getItem('token');
         const isAuthPage = window.location.pathname === '/login' || window.location.pathname === '/register';
 
-        if (!token || isAuthPage) {
+        if (!isLocal || !token || isAuthPage) {
             setLoaded(true);
             return;
         }
