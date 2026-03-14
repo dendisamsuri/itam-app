@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import apiLocal from '../apiLocal';
@@ -17,6 +17,9 @@ import {
   CalendarTodayOutlined as CalendarIcon,
   StorefrontOutlined as VendorIcon
 } from '@mui/icons-material';
+import PageContainer from '../components/PageContainer';
+import PageHeader from '../components/PageHeader';
+import { usePermissions } from '../PermissionsContext';
 
 const statusOptions = ['solved', 'not solved', 'broken', 'need to service'];
 
@@ -49,13 +52,17 @@ function RepairHistoryPage() {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
 
+  const { canWrite, userRole } = usePermissions();
+  const isSuperAdmin = userRole === 'superadmin';
+  const hasWriteAccess = canWrite('repair_history') || isSuperAdmin;
+
   const fetchRepairHistory = useCallback(async () => {
     try {
       if (import.meta.env.VITE_APP_ENV === 'local') {
         const token = localStorage.getItem('token');
         if (!token) { navigate('/login'); return; }
 
-        const { data } = await apiLocal.get(`/assets/${assetId}/repairs`);
+        const { data } = await apiLocal.get(`/api/assets/${assetId}/repairs`);
         setAsset(data.asset);
         setRepairs(data.repairs || []);
       } else {
@@ -117,7 +124,18 @@ function RepairHistoryPage() {
     setPage(0);
   };
 
-  const paginatedRepairs = repairs;
+  const paginatedRepairs = useMemo(() => {
+    if (import.meta.env.VITE_APP_ENV !== 'local') return repairs;
+    const from = page * rowsPerPage;
+    const to = from + rowsPerPage;
+    return repairs.slice(from, to);
+  }, [repairs, page, rowsPerPage]);
+
+  useEffect(() => {
+    if (import.meta.env.VITE_APP_ENV === 'local') {
+      setTotalRepairs(repairs.length);
+    }
+  }, [repairs]);
 
   const handleAddRepair = async () => {
     if (!formData.fault_description || !formData.repair_details) {
@@ -126,7 +144,7 @@ function RepairHistoryPage() {
     setFormError('');
     try {
       if (import.meta.env.VITE_APP_ENV === 'local') {
-        await apiLocal.post(`/assets/${assetId}/repairs`, {
+        await apiLocal.post(`/api/assets/${assetId}/repairs`, {
           ...formData
         });
 
@@ -159,31 +177,19 @@ function RepairHistoryPage() {
   };
 
   return (
-    <Box className="fade-in-up">
-      {/* Page Header */}
-      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, mb: 3, flexWrap: 'wrap' }}>
-        <IconButton
-          onClick={() => navigate('/')}
-          sx={{ bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider', flexShrink: 0 }}
-        >
-          <ArrowBackIcon fontSize="small" />
-        </IconButton>
-        <Box sx={{ flex: 1 }}>
-          <Typography variant="h5" fontWeight={800} letterSpacing="-0.02em">
-            Repair History
-          </Typography>
-          {loading ? (
-            <Skeleton width={200} height={20} />
-          ) : (
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-              {asset?.name} · <code style={{ fontSize: '0.8em' }}>{asset?.serial_number}</code>
-            </Typography>
-          )}
-        </Box>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenDialog} size={isMobile ? 'small' : 'medium'}>
-          Add Record
-        </Button>
-      </Box>
+    <PageContainer>
+      <PageHeader
+        title="Repair History"
+        subtitle={asset ? `${asset.name} · ${asset.serial_number}` : ""}
+        backPath="/"
+        action={
+          hasWriteAccess ? (
+            <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenDialog}>
+              Add Record
+            </Button>
+          ) : null
+        }
+      />
 
       {pageError && <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>{pageError}</Alert>}
 
@@ -381,7 +387,7 @@ function RepairHistoryPage() {
           {snackbar.message}
         </Alert>
       </Snackbar>
-    </Box>
+    </PageContainer>
   );
 }
 

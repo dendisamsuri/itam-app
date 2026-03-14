@@ -1,13 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Barcode from 'react-barcode';
 import { supabase } from '../supabaseClient';
 import apiLocal from '../apiLocal';
 import {
   Paper, Typography, TextField, Button, Box, Grid, Alert,
-  InputAdornment, Snackbar, IconButton
+  InputAdornment, Snackbar, Autocomplete
 } from '@mui/material';
-import { ArrowBack as ArrowBackIcon } from '@mui/icons-material';
+import PageContainer from '../components/PageContainer';
+import PageHeader from '../components/PageHeader';
 
 const fields = [
   { name: 'serial_number', label: 'Serial Number (SN)', required: true, xs: 12 },
@@ -20,10 +21,33 @@ const fields = [
 ];
 
 function AddAssetPage() {
-  const [formData, setFormData] = useState({ serial_number: '', name: '', brand: '', model: '', specs: '', photo_url: '', purchase_date: '', warranty_expiry: '' });
+  const [formData, setFormData] = useState({
+    serial_number: '', name: '', brand: '', model: '', specs: '',
+    photo_url: '', purchase_date: '', warranty_expiry: '', part_of_id: ''
+  });
+  const [assets, setAssets] = useState([]);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const isLocal = import.meta.env.VITE_APP_ENV === 'local';
+
+  useEffect(() => {
+    const fetchAssets = async () => {
+      try {
+        if (isLocal) {
+          const { data } = await apiLocal.get('/api/assets');
+          setAssets(data);
+        } else {
+          const { data, error } = await supabase.from('assets').select('id, name, serial_number, brand');
+          if (error) throw error;
+          setAssets(data);
+        }
+      } catch (err) {
+        console.error('Error fetching assets:', err);
+      }
+    };
+    fetchAssets();
+  }, [isLocal]);
 
   const handleInputChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
@@ -31,10 +55,16 @@ function AddAssetPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      const payload = { ...formData, photo_url: formData.photo_url || null, purchase_date: formData.purchase_date || null, warranty_expiry: formData.warranty_expiry || null };
+      const payload = {
+        ...formData,
+        photo_url: formData.photo_url || null,
+        purchase_date: formData.purchase_date || null,
+        warranty_expiry: formData.warranty_expiry || null,
+        part_of_id: formData.part_of_id || null
+      };
 
-      if (import.meta.env.VITE_APP_ENV === 'local') {
-        await apiLocal.post('/assets', payload);
+      if (isLocal) {
+        await apiLocal.post('/api/assets', payload);
       } else {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error("Not authenticated");
@@ -53,13 +83,11 @@ function AddAssetPage() {
   };
 
   return (
-    <Box>
-      <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
-        <IconButton onClick={() => navigate('/')} sx={{ border: '1px solid', borderColor: 'divider' }}>
-          <ArrowBackIcon />
-        </IconButton>
-        <Typography variant="h5" fontWeight={600}>Add New Asset</Typography>
-      </Box>
+    <PageContainer>
+      <PageHeader
+        title="Add New Asset"
+        backPath="/"
+      />
 
       <Grid container spacing={3}>
         <Grid size={{ xs: 12, lg: 8 }}>
@@ -78,6 +106,20 @@ function AddAssetPage() {
                 ))}
                 <Grid size={12}>
                   <TextField fullWidth size="small" multiline rows={3} label="Specifications" name="specs" value={formData.specs} onChange={handleInputChange} />
+                </Grid>
+                <Grid size={12}>
+                  <Autocomplete
+                    size="small"
+                    options={assets}
+                    getOptionLabel={(option) => `${option.name} - ${option.brand} (${option.serial_number})`}
+                    value={assets.find(a => a.id === formData.part_of_id) || null}
+                    onChange={(event, newValue) => {
+                      setFormData({ ...formData, part_of_id: newValue ? newValue.id : '' });
+                    }}
+                    renderInput={(params) => (
+                      <TextField {...params} label="Part of (Belongs to Asset)" placeholder="Search parent asset..." />
+                    )}
+                  />
                 </Grid>
               </Grid>
 
@@ -109,7 +151,7 @@ function AddAssetPage() {
       <Snackbar open={snackbar.open} autoHideDuration={3000} onClose={() => setSnackbar({ ...snackbar, open: false })} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
         <Alert severity={snackbar.severity} sx={{ width: '100%' }}>{snackbar.message}</Alert>
       </Snackbar>
-    </Box>
+    </PageContainer>
   );
 }
 

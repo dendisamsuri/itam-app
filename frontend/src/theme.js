@@ -1,6 +1,6 @@
 import { createTheme } from '@mui/material/styles';
 
-const theme = createTheme({
+const getTheme = (mode) => createTheme({
   breakpoints: {
     values: {
       xs: 0,
@@ -11,60 +11,67 @@ const theme = createTheme({
     },
   },
   palette: {
-    mode: 'light',
-    primary: {
-      main: '#6366f1',       // Indigo-500
-      light: '#a5b4fc',
-      lighter: '#ede9fe',
-      dark: '#4338ca',
-      contrastText: '#ffffff',
-    },
-    secondary: {
-      main: '#10b981',       // Emerald-500
-      light: '#6ee7b7',
-      lighter: '#d1fae5',
-      dark: '#047857',
-      contrastText: '#ffffff',
-    },
-    success: {
-      main: '#22c55e',
-      light: '#86efac',
-      lighter: '#dcfce7',
-    },
-    warning: {
-      main: '#f59e0b',
-      light: '#fcd34d',
-      lighter: '#fef3c7',
-    },
-    error: {
-      main: '#ef4444',
-      light: '#fca5a5',
-      lighter: '#fee2e2',
-    },
-    background: {
-      default: '#f8fafc',
-      paper: '#ffffff',
-    },
-    text: {
-      primary: '#0f172a',    // Slate-900
-      secondary: '#64748b',  // Slate-500
-    },
-    divider: '#f1f5f9',
+    mode,
+    ...(mode === 'light'
+      ? {
+          primary: {
+            main: '#a69279',
+            light: '#c8bcac',
+            lighter: '#f5f2ef',
+            dark: '#847461',
+            contrastText: '#ffffff',
+          },
+          secondary: {
+            main: '#10b981',
+            light: '#6ee7b7',
+            lighter: '#d1fae5',
+            dark: '#047857',
+            contrastText: '#ffffff',
+          },
+          success: { main: '#22c55e', light: '#86efac', lighter: '#dcfce7' },
+          warning: { main: '#f59e0b', light: '#fcd34d', lighter: '#fef3c7' },
+          error: { main: '#ef4444', light: '#fca5a5', lighter: '#fee2e2' },
+          background: { default: '#f8fafc', paper: '#ffffff' },
+          text: { primary: '#0f172a', secondary: '#64748b' },
+          divider: '#f1f5f9',
+        }
+      : {
+          primary: {
+            main: '#c8bcac',
+            light: '#ddd5cb',
+            lighter: '#2a2520',
+            dark: '#a69279',
+            contrastText: '#0f172a',
+          },
+          secondary: {
+            main: '#34d399',
+            light: '#6ee7b7',
+            lighter: '#064e3b',
+            dark: '#10b981',
+            contrastText: '#0f172a',
+          },
+          success: { main: '#22c55e', light: '#4ade80', lighter: '#064e3b' },
+          warning: { main: '#fbbf24', light: '#fcd34d', lighter: '#78350f' },
+          error: { main: '#f87171', light: '#fca5a5', lighter: '#7f1d1d' },
+          background: { default: '#0f172a', paper: '#1e293b' },
+          text: { primary: '#f1f5f9', secondary: '#94a3b8' },
+          divider: '#334155',
+        }),
   },
   typography: {
     fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
-    h4: { 
-      fontWeight: 800, 
+    h4: {
+      fontWeight: 800,
       letterSpacing: '-0.02em',
       fontSize: 'clamp(1.75rem, 4vw, 2.125rem)',
     },
-    h5: { 
-      fontWeight: 800, 
+    h5: {
+      fontWeight: 800,
       letterSpacing: '-0.02em',
       fontSize: 'clamp(1.5rem, 3.5vw, 1.75rem)',
     },
-    h6: { 
-      fontWeight: 700, 
+    h6: {
+      fontWeight: 700,
       letterSpacing: '-0.01em',
       fontSize: 'clamp(1.125rem, 3vw, 1.25rem)',
     },
@@ -88,9 +95,9 @@ const theme = createTheme({
           padding: '10px 24px',
           boxShadow: 'none',
           transition: 'all 0.2s ease-in-out',
-          minHeight: 44, // Better touch target
+          minHeight: 44,
           '@media (max-width:600px)': {
-            minHeight: 48, // Even larger on mobile
+            minHeight: 48,
             fontSize: '0.9375rem',
           },
           '&:hover': {
@@ -102,9 +109,10 @@ const theme = createTheme({
           }
         },
         containedPrimary: {
-          background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
+          background: mode === 'light' ? '#a69279' : '#c8bcac',
+          color: mode === 'light' ? '#ffffff' : '#0f172a',
           '&:hover': {
-            background: 'linear-gradient(135deg, #4338ca 0%, #6d28d9 100%)',
+            background: mode === 'light' ? '#847461' : '#ddd5cb',
           },
         },
         containedSecondary: {
@@ -136,24 +144,24 @@ const theme = createTheme({
         root: {
           '& .MuiOutlinedInput-root': {
             borderRadius: 12,
-            backgroundColor: '#f8fafc',
+            backgroundColor: mode === 'light' ? '#f8fafc' : '#1e293b',
             transition: 'all 0.2s ease',
             minHeight: 44,
             '@media (max-width:600px)': {
-              minHeight: 48, // Better touch target on mobile
-              fontSize: '16px', // Prevents zoom on iOS
+              minHeight: 48,
+              fontSize: '16px',
             },
             '&:hover .MuiOutlinedInput-notchedOutline': {
-              borderColor: '#4f46e5',
+              borderColor: mode === 'light' ? '#a69279' : '#c8bcac',
             },
             '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-              borderColor: '#4f46e5',
+              borderColor: mode === 'light' ? '#a69279' : '#c8bcac',
               borderWidth: 2,
             },
           },
           '& .MuiInputLabel-root': {
             '@media (max-width:600px)': {
-              fontSize: '16px', // Prevents zoom on iOS
+              fontSize: '16px',
             },
           },
         },
@@ -163,13 +171,19 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           borderRadius: 20,
-          boxShadow: '0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)',
+          boxShadow: mode === 'light'
+            ? '0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)'
+            : '0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2)',
         },
         elevation1: {
-          boxShadow: '0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)',
+          boxShadow: mode === 'light'
+            ? '0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)'
+            : '0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2)',
         },
         elevation3: {
-          boxShadow: '0 10px 40px rgba(79,70,229,0.08)',
+          boxShadow: mode === 'light'
+            ? '0 10px 40px rgba(166,146,121,0.08)'
+            : '0 10px 40px rgba(0,0,0,0.3)',
         },
       },
     },
@@ -177,14 +191,18 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           borderRadius: 20,
-          boxShadow: '0 1px 3px rgba(0,0,0,0.02), 0 1px 2px rgba(0,0,0,0.03)',
-          border: '1px solid #f1f5f9',
+          boxShadow: mode === 'light'
+            ? '0 1px 3px rgba(0,0,0,0.02), 0 1px 2px rgba(0,0,0,0.03)'
+            : '0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2)',
+          border: `1px solid ${mode === 'light' ? '#f1f5f9' : '#334155'}`,
           transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           '@media (hover: hover)': {
             '&:hover': {
               transform: 'translateY(-4px)',
-              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 10px 10px -5px rgba(0, 0, 0, 0.02)',
-              borderColor: '#e2e8f0',
+              boxShadow: mode === 'light'
+                ? '0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 10px 10px -5px rgba(0, 0, 0, 0.02)'
+                : '0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2)',
+              borderColor: mode === 'light' ? '#e2e8f0' : '#475569',
             }
           },
           '@media (max-width:600px)': {
@@ -202,31 +220,32 @@ const theme = createTheme({
           height: 28,
         },
         colorSuccess: {
-          backgroundColor: '#dcfce7',
-          color: '#15803d',
+          backgroundColor: mode === 'light' ? '#dcfce7' : '#064e3b',
+          color: mode === 'light' ? '#15803d' : '#4ade80',
         },
         colorWarning: {
-          backgroundColor: '#fef3c7',
-          color: '#b45309',
+          backgroundColor: mode === 'light' ? '#fef3c7' : '#78350f',
+          color: mode === 'light' ? '#b45309' : '#fbbf24',
         },
         colorDefault: {
-          backgroundColor: '#f1f5f9',
-          color: '#475569',
+          backgroundColor: mode === 'light' ? '#f1f5f9' : '#334155',
+          color: mode === 'light' ? '#475569' : '#94a3b8',
         },
       },
     },
     MuiAppBar: {
       styleOverrides: {
         root: {
-          backgroundImage: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
-          boxShadow: '0 4px 20px rgba(79,70,229,0.15)',
+          backgroundColor: mode === 'light' ? '#a69279' : '#1e293b',
+          backgroundImage: 'none',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
         },
       },
     },
     MuiDrawer: {
       styleOverrides: {
         paper: {
-          borderRight: '1px solid #e2e8f0',
+          borderRight: `1px solid ${mode === 'light' ? '#e2e8f0' : '#334155'}`,
           boxShadow: 'none',
         },
       },
@@ -237,24 +256,24 @@ const theme = createTheme({
           borderRadius: 12,
           marginBottom: 6,
           padding: '10px 16px',
-          minHeight: 48, // Better touch target
+          minHeight: 48,
           transition: 'all 0.2s ease',
           '@media (max-width:600px)': {
             minHeight: 52,
             padding: '12px 16px',
           },
           '&.Mui-selected': {
-            backgroundColor: '#ede9fe',
-            color: '#4f46e5',
+            backgroundColor: mode === 'light' ? '#f5f2ef' : '#2a2520',
+            color: mode === 'light' ? '#847461' : '#c8bcac',
             '& .MuiListItemIcon-root': {
-              color: '#4f46e5',
+              color: mode === 'light' ? '#847461' : '#c8bcac',
             },
             '&:hover': {
-              backgroundColor: '#ddd6fe',
+              backgroundColor: mode === 'light' ? '#ede9e5' : '#3a3530',
             },
           },
           '&:hover': {
-            backgroundColor: '#f1f5f9',
+            backgroundColor: mode === 'light' ? '#f1f5f9' : '#334155',
           },
         },
       },
@@ -264,8 +283,8 @@ const theme = createTheme({
         root: {
           '& .MuiTableCell-root': {
             fontWeight: 700,
-            color: '#475569',
-            backgroundColor: '#f8fafc',
+            color: mode === 'light' ? '#475569' : '#94a3b8',
+            backgroundColor: mode === 'light' ? '#f8fafc' : '#0f172a',
             fontSize: '0.75rem',
             textTransform: 'uppercase',
             letterSpacing: '0.08em',
@@ -278,7 +297,7 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           '&:hover': {
-            backgroundColor: '#f8fafc',
+            backgroundColor: mode === 'light' ? '#f8fafc' : '#1e293b',
           },
           '&:last-child td': {
             borderBottom: 'none',
@@ -290,7 +309,7 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           padding: '16px 24px',
-          borderColor: '#f1f5f9',
+          borderColor: mode === 'light' ? '#f1f5f9' : '#334155',
           '@media (max-width:900px)': {
             padding: '12px 16px',
             fontSize: '0.875rem',
@@ -342,9 +361,9 @@ const theme = createTheme({
     MuiBottomNavigation: {
       styleOverrides: {
         root: {
-          borderTop: '1px solid #e2e8f0',
+          borderTop: `1px solid ${mode === 'light' ? '#e2e8f0' : '#334155'}`,
           boxShadow: '0 -4px 20px rgba(0,0,0,0.04)',
-          height: 72, // Larger for tablets
+          height: 72,
         },
       },
     },
@@ -352,7 +371,7 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           '&.Mui-selected': {
-            color: '#4f46e5',
+            color: mode === 'light' ? '#847461' : '#c8bcac',
           },
           paddingTop: 12,
           paddingBottom: 12,
@@ -385,7 +404,7 @@ const theme = createTheme({
           minHeight: 44,
           '@media (max-width:600px)': {
             minHeight: 48,
-            fontSize: '16px', // Prevents zoom on iOS
+            fontSize: '16px',
           },
         },
       },
@@ -394,7 +413,7 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           '@media (max-width:600px)': {
-            fontSize: '16px', // Prevents zoom on iOS
+            fontSize: '16px',
           },
         },
       },
@@ -402,4 +421,4 @@ const theme = createTheme({
   },
 });
 
-export default theme;
+export default getTheme;

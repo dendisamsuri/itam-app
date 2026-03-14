@@ -9,15 +9,16 @@ import {
 } from '@mui/material';
 import {
     Add as AddIcon,
-    Person as PersonIcon,
     Business as BusinessIcon,
     Email as EmailIcon,
     Edit as EditIcon,
-    Search as SearchIcon,
-    SaveOutlined as SaveIcon
+    Search as SearchIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { getUserPayload } from '../utils/auth.js';
+import PageContainer from '../components/PageContainer';
+import PageHeader from '../components/PageHeader';
+import { usePermissions } from '../PermissionsContext';
 
 
 
@@ -31,19 +32,16 @@ function EmployeeListPage() {
     const [error, setError] = useState('');
     const navigate = useNavigate();
 
-    const [user, setUser] = useState(null);
-    const isSuperAdmin = user?.role === 'superadmin';
-    const isAdmin = user?.role === 'admin';
-
-    useEffect(() => {
-        getUserPayload().then(u => setUser(u));
-    }, []);
+    const { canWrite, userRole } = usePermissions();
+    const isSuperAdmin = userRole === 'superadmin';
+    const hasWriteAccess = canWrite('employee_list') || isSuperAdmin;
 
     const [openAddDialog, setOpenAddDialog] = useState(false);
     const [addFormData, setAddFormData] = useState({ name: '', department: '', email: '' });
     const [addError, setAddError] = useState('');
     const [snackbar, setSnackbar] = useState({ open: false, message: '' });
     const [searchQuery, setSearchQuery] = useState('');
+    const [searchInput, setSearchInput] = useState('');
 
     const [openEditDialog, setOpenEditDialog] = useState(false);
     const [editFormData, setEditFormData] = useState({ id: '', name: '', department: '', email: '' });
@@ -66,7 +64,7 @@ function EmployeeListPage() {
         }
         try {
             if (import.meta.env.VITE_APP_ENV === 'local') {
-                await apiLocal.post('/employees', {
+                await apiLocal.post('/api/employees', {
                     name: addFormData.name,
                     department: addFormData.department || null,
                     email: addFormData.email || null
@@ -114,7 +112,7 @@ function EmployeeListPage() {
         }
         try {
             if (import.meta.env.VITE_APP_ENV === 'local') {
-                await apiLocal.put(`/employees/${editFormData.id}`, {
+                await apiLocal.put(`/api/employees/${editFormData.id}`, {
                     name: editFormData.name,
                     department: editFormData.department || null,
                     email: editFormData.email || null
@@ -150,9 +148,23 @@ function EmployeeListPage() {
                 const token = localStorage.getItem('token');
                 if (!token) { navigate('/login'); return; }
 
-                const { data } = await apiLocal.get('/employees');
-                setEmployees(data || []);
-                setTotalEmployees(data?.length || 0);
+                const { data } = await apiLocal.get('/api/employees');
+                let result = data || [];
+
+                if (searchQuery) {
+                    const lowerQuery = searchQuery.toLowerCase();
+                    result = result.filter(emp =>
+                        (emp.name && emp.name.toLowerCase().includes(lowerQuery)) ||
+                        (emp.department && emp.department.toLowerCase().includes(lowerQuery)) ||
+                        (emp.email && emp.email.toLowerCase().includes(lowerQuery))
+                    );
+                }
+
+                setTotalEmployees(result.length);
+
+                const from = page * rowsPerPage;
+                const to = from + rowsPerPage;
+                setEmployees(result.slice(from, to));
             } else {
                 const { data: { session } } = await supabase.auth.getSession();
                 if (!session) { navigate('/login'); return; }
@@ -184,6 +196,17 @@ function EmployeeListPage() {
         }
     }, [navigate, page, rowsPerPage, searchQuery]);
 
+    const handleSearch = () => {
+        setSearchQuery(searchInput);
+        setPage(0);
+    };
+
+    const handleKeyDown = (e) => {
+        if (e.key === 'Enter') {
+            handleSearch();
+        }
+    };
+
     useEffect(() => {
         fetchEmployees();
     }, [fetchEmployees]);
@@ -210,50 +233,57 @@ function EmployeeListPage() {
     }
 
     return (
-        <Box className="fade-in-up">
-            <Box sx={{ mb: { xs: 3, md: 5 }, display: 'flex', justifyContent: 'space-between', alignItems: isMobile ? 'stretch' : 'flex-start', flexDirection: isMobile ? 'column' : 'row', gap: 3 }}>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                    <Typography variant={isMobile ? 'h5' : 'h4'} sx={{ fontWeight: 800, color: 'text.primary', letterSpacing: '-0.02em' }}>
-                        Employee Directory
-                    </Typography>
-                    <Typography variant="body2" sx={{ color: 'text.secondary', maxWidth: 600 }}>
-                        {employees.length} staff members in the registry.
-                    </Typography>
-                </Box>
-                {(isSuperAdmin || isAdmin) && (
-                    <Button
-                        variant="contained"
-                        size={isMobile ? 'medium' : 'large'}
-                        startIcon={<AddIcon />}
-                        onClick={handleOpenAddDialog}
-                        sx={{
-                            borderRadius: '12px',
-                            px: { xs: 2.5, sm: 4 },
-                            py: { xs: 1, sm: 1.5 },
-                            boxShadow: '0 8px 20px -4px rgba(99, 102, 241, 0.4)'
-                        }}
-                    >
-                        Add Employee
-                    </Button>
-                )}
-            </Box>
+        <PageContainer>
+            <PageHeader
+                title="Employee Directory"
+                subtitle={`${totalEmployees} staff members in the registry.`}
+                action={
+                    hasWriteAccess ? (
+                        <Button
+                            variant="contained"
+                            startIcon={<AddIcon />}
+                            onClick={handleOpenAddDialog}
+                        >
+                            Add Employee
+                        </Button>
+                    ) : null
+                }
+            />
 
-            <Box sx={{ mb: 4 }}>
+            <Box sx={{ mb: 4, display: 'flex', gap: 2 }}>
                 <TextField
                     fullWidth
+                    size="small"
                     variant="outlined"
                     placeholder="Search by name, email, or department..."
-                    value={searchQuery}
-                    onChange={(e) => { setSearchQuery(e.target.value); setPage(0); }}
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
+                    onKeyDown={handleKeyDown}
                     InputProps={{
                         startAdornment: (
                             <InputAdornment position="start">
-                                <SearchIcon color="action" />
+                                <SearchIcon color="action" fontSize="small" />
                             </InputAdornment>
                         ),
                         sx: { borderRadius: '12px', bgcolor: 'background.paper' }
                     }}
                 />
+                <Button
+                    variant="contained"
+                    size="small"
+                    onClick={handleSearch}
+                    sx={{
+                        borderRadius: '12px',
+                        px: 3,
+                        minWidth: 'fit-content',
+                        boxShadow: '0 2px 8px rgba(99, 102, 241, 0.15)',
+                        '&:hover': {
+                            boxShadow: '0 4px 12px rgba(99, 102, 241, 0.25)'
+                        }
+                    }}
+                >
+                    {isMobile ? <SearchIcon fontSize="small" /> : 'Search'}
+                </Button>
             </Box>
 
             {error && (
@@ -315,7 +345,7 @@ function EmployeeListPage() {
                                                 </Typography>
                                             </Box>
                                         </Stack>
-                                        {(isSuperAdmin || isAdmin) && (
+                                        {hasWriteAccess && (
                                             <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid', borderColor: 'divider', display: 'flex', justifyContent: 'flex-end' }}>
                                                 <Button
                                                     size="small"
@@ -343,13 +373,13 @@ function EmployeeListPage() {
                                     <TableCell>Name</TableCell>
                                     <TableCell>Department</TableCell>
                                     <TableCell>Email Address</TableCell>
-                                    {(isSuperAdmin || isAdmin) && <TableCell align="right">Actions</TableCell>}
+                                    {hasWriteAccess && <TableCell align="right">Actions</TableCell>}
                                 </TableRow>
                             </TableHead>
                             <TableBody>
                                 {filteredEmployees.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={isSuperAdmin || isAdmin ? 4 : 3} align="center" sx={{ py: 6, color: 'text.secondary' }}>
+                                        <TableCell colSpan={hasWriteAccess ? 4 : 3} align="center" sx={{ py: 6, color: 'text.secondary' }}>
                                             No employees found.
                                         </TableCell>
                                     </TableRow>
@@ -366,7 +396,7 @@ function EmployeeListPage() {
                                             </TableCell>
                                             <TableCell sx={{ py: 2 }}>{employee.department || '-'}</TableCell>
                                             <TableCell sx={{ py: 2 }}>{employee.email || '-'}</TableCell>
-                                            {(isSuperAdmin || isAdmin) && (
+                                            {hasWriteAccess && (
                                                 <TableCell align="right" sx={{ py: 2 }}>
                                                     <IconButton size="small" onClick={() => handleOpenEditDialog(employee)} color="primary">
                                                         <EditIcon fontSize="small" />
@@ -462,7 +492,7 @@ function EmployeeListPage() {
                     {snackbar.message}
                 </Alert>
             </Snackbar>
-        </Box>
+        </PageContainer>
     );
 }
 

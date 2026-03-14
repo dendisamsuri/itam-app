@@ -5,9 +5,11 @@ import {
     Box, Typography, Card, CardContent, Table, TableBody, TableCell, TableContainer,
     TableHead, TableRow, Paper, CircularProgress, Alert, TextField, InputAdornment,
     FormControl, InputLabel, Select, MenuItem, Grid, Chip, TablePagination,
-    useTheme, useMediaQuery, Stack, Divider
+    useTheme, useMediaQuery, Stack, Divider, Button
 } from '@mui/material';
 import { Search as SearchIcon, BuildOutlined as BuildIcon } from '@mui/icons-material';
+import PageContainer from '../components/PageContainer';
+import PageHeader from '../components/PageHeader';
 
 const statusColor = (s) => {
     if (s === 'solved') return 'success';
@@ -29,6 +31,11 @@ function GlobalRepairHistoryPage() {
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
 
+    const [tempSearchQuery, setTempSearchQuery] = useState('');
+    const [tempStatusFilter, setTempStatusFilter] = useState('');
+    const [tempStartDate, setTempStartDate] = useState('');
+    const [tempEndDate, setTempEndDate] = useState('');
+
     // Pagination
     const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -39,7 +46,7 @@ function GlobalRepairHistoryPage() {
                 const token = localStorage.getItem('token');
                 if (!token) return;
 
-                const { data } = await apiLocal.get('/repairs');
+                const { data } = await apiLocal.get('/api/repairs');
                 setRepairs(data || []);
             } else {
                 const { data: { session } } = await supabase.auth.getSession();
@@ -68,6 +75,27 @@ function GlobalRepairHistoryPage() {
         setPage(0);
     }, [searchQuery, statusFilter, startDate, endDate]);
 
+    const handleApplyFilters = () => {
+        if (tempSearchQuery && tempSearchQuery.length > 0 && tempSearchQuery.length < 3) return;
+        setSearchQuery(tempSearchQuery);
+        setStatusFilter(tempStatusFilter);
+        setStartDate(tempStartDate);
+        setEndDate(tempEndDate);
+        setPage(0);
+    };
+
+    const handleClearFilters = () => {
+        setTempSearchQuery('');
+        setTempStatusFilter('');
+        setTempStartDate('');
+        setTempEndDate('');
+        setSearchQuery('');
+        setStatusFilter('');
+        setStartDate('');
+        setEndDate('');
+        setPage(0);
+    };
+
     const formatDate = (dateString) => {
         if (!dateString) return '-';
         return new Date(dateString).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -77,7 +105,7 @@ function GlobalRepairHistoryPage() {
         return repairs.filter(log => {
             // Search
             const q = searchQuery.toLowerCase();
-            const matchesSearch = !q || (
+            const matchesSearch = !q || q.length < 3 || (
                 (log.asset_name && log.asset_name.toLowerCase().includes(q)) ||
                 (log.serial_number && log.serial_number.toLowerCase().includes(q)) ||
                 (log.fault_description && log.fault_description.toLowerCase().includes(q)) ||
@@ -135,15 +163,11 @@ function GlobalRepairHistoryPage() {
     const statusOptions = [...new Set(repairs.map(r => r.status).filter(Boolean))];
 
     return (
-        <Box className="fade-in-up">
-            <Box sx={{ mb: 4, display: 'flex', flexDirection: 'column', gap: 1 }}>
-                <Typography variant="h5" sx={{ fontWeight: 800, color: 'text.primary', letterSpacing: '-0.02em' }}>
-                    Global Repair History
-                </Typography>
-                <Typography variant="body2" sx={{ color: 'text.secondary', maxWidth: 600 }}>
-                    View and filter the complete timeline of all asset repairs across the organization.
-                </Typography>
-            </Box>
+        <PageContainer>
+            <PageHeader
+                title="Global Repair History"
+                subtitle="View and filter the complete timeline of all asset repairs across the organization."
+            />
 
             {error && (
                 <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>{error}</Alert>
@@ -153,12 +177,13 @@ function GlobalRepairHistoryPage() {
             <Card sx={{ mb: 3, borderRadius: 3, boxShadow: '0 2px 10px rgba(0,0,0,0.05)', border: 'none' }}>
                 <CardContent>
                     <Grid container spacing={2}>
-                        <Grid size={{ xs: 12, md: 4 }}>
+                        <Grid size={{ xs: 12, md: 2.5 }}>
                             <TextField
                                 fullWidth size="small"
                                 placeholder="Search asset, serial, or faults..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
+                                value={tempSearchQuery}
+                                onChange={(e) => setTempSearchQuery(e.target.value)}
+                                onKeyPress={(e) => e.key === 'Enter' && handleApplyFilters()}
                                 InputProps={{
                                     startAdornment: (
                                         <InputAdornment position="start">
@@ -167,35 +192,44 @@ function GlobalRepairHistoryPage() {
                                     ),
                                 }}
                             />
+                            {tempSearchQuery && tempSearchQuery.length > 0 && tempSearchQuery.length < 3 && (
+                                <Typography variant="caption" color="error">Min. 3 characters</Typography>
+                            )}
                         </Grid>
-                        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-                            <FormControl fullWidth size="small">
-                                <InputLabel>Status</InputLabel>
-                                <Select
-                                    value={statusFilter}
-                                    label="Status"
-                                    onChange={(e) => setStatusFilter(e.target.value)}
-                                >
-                                    <MenuItem value=""><em>All Statuses</em></MenuItem>
-                                    {statusOptions.map(st => (
-                                        <MenuItem key={st} value={st}>{st}</MenuItem>
-                                    ))}
-                                </Select>
-                            </FormControl>
+                        <Grid size={{ xs: 12, sm: 6, md: 2.5 }}>
+                            <TextField
+                                select
+                                label="Status"
+                                fullWidth
+                                size="small"
+                                value={tempStatusFilter}
+                                onChange={(e) => setTempStatusFilter(e.target.value)}
+                            >
+                                <MenuItem value=""><em>All Statuses</em></MenuItem>
+                                {statusOptions.map(st => (
+                                    <MenuItem key={st} value={st}>{st}</MenuItem>
+                                ))}
+                            </TextField>
                         </Grid>
-                        <Grid size={{ xs: 6, sm: 3, md: 2.5 }}>
+                        <Grid size={{ xs: 6, sm: 3, md: 2.25 }}>
                             <TextField
                                 fullWidth size="small" type="date" label="Start"
                                 InputLabelProps={{ shrink: true }}
-                                value={startDate} onChange={(e) => setStartDate(e.target.value)}
+                                value={tempStartDate} onChange={(e) => setTempStartDate(e.target.value)}
                             />
                         </Grid>
-                        <Grid size={{ xs: 6, sm: 3, md: 2.5 }}>
+                        <Grid size={{ xs: 6, sm: 3, md: 2.25 }}>
                             <TextField
                                 fullWidth size="small" type="date" label="End"
                                 InputLabelProps={{ shrink: true }}
-                                value={endDate} onChange={(e) => setEndDate(e.target.value)}
+                                value={tempEndDate} onChange={(e) => setTempEndDate(e.target.value)}
                             />
+                        </Grid>
+                        <Grid size={{ xs: 12, md: 2.5 }}>
+                            <Stack direction="row" spacing={1}>
+                                <Button variant="contained" onClick={handleApplyFilters} fullWidth disableElevation size="small">Search</Button>
+                                <Button variant="outlined" onClick={handleClearFilters} size="small">Clear</Button>
+                            </Stack>
                         </Grid>
                     </Grid>
                 </CardContent>
@@ -331,7 +365,7 @@ function GlobalRepairHistoryPage() {
                     )}
                 </Card>
             )}
-        </Box>
+        </PageContainer>
     );
 }
 

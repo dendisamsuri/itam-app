@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS employees (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100) UNIQUE NOT NULL,
     department VARCHAR(100),
-    email VARCHAR(100)
+    email VARCHAR(100) UNIQUE
 );
 
 -- 2. Create assets table
@@ -24,7 +24,8 @@ CREATE TABLE IF NOT EXISTS assets (
     assigned_to VARCHAR(100),
     assigned_to_id INTEGER REFERENCES employees(id) ON DELETE SET NULL,
     created_by VARCHAR(100),
-    updated_by VARCHAR(100)
+    updated_by VARCHAR(100),
+    part_of_id INTEGER REFERENCES assets(id) ON DELETE SET NULL
 );
 
 -- 3. Create asset_history table
@@ -58,7 +59,28 @@ CREATE TABLE IF NOT EXISTS public.users (
   id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
   name VARCHAR(100) NOT NULL,
   department VARCHAR(100),
-  role VARCHAR(50) DEFAULT 'user'
+  role VARCHAR(50) DEFAULT 'user',
+  email VARCHAR(100),
+  deleted_at TIMESTAMP DEFAULT NULL
+);
+
+-- 6. Create settings table
+CREATE TABLE IF NOT EXISTS settings (
+    key VARCHAR(50) PRIMARY KEY,
+    value TEXT,
+    updated_at TIMESTAMP DEFAULT timezone('utc'::text, now())
+);
+INSERT INTO settings (key, value) VALUES ('it_user_id', NULL) ON CONFLICT (key) DO NOTHING;
+INSERT INTO settings (key, value) VALUES ('ga_user_id', NULL) ON CONFLICT (key) DO NOTHING;
+
+-- 7. Create role_permissions table
+CREATE TABLE IF NOT EXISTS role_permissions (
+    id SERIAL PRIMARY KEY,
+    role_name VARCHAR(50) NOT NULL,
+    menu_key VARCHAR(100) NOT NULL,
+    can_view BOOLEAN DEFAULT false,
+    can_write BOOLEAN DEFAULT false,
+    UNIQUE(role_name, menu_key)
 );
 
 -- Enable Row Level Security (RLS)
@@ -67,6 +89,8 @@ ALTER TABLE assets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE asset_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE repair_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE role_permissions ENABLE ROW LEVEL SECURITY;
 
 -- Allow all authenticated users to read
 DROP POLICY IF EXISTS "Allow authenticated read access" ON employees;
@@ -79,6 +103,10 @@ DROP POLICY IF EXISTS "Allow authenticated read access" ON repair_logs;
 CREATE POLICY "Allow authenticated read access" ON repair_logs FOR SELECT TO authenticated USING (true);
 DROP POLICY IF EXISTS "Allow authenticated read access" ON public.users;
 CREATE POLICY "Allow authenticated read access" ON public.users FOR SELECT TO authenticated USING (true);
+DROP POLICY IF EXISTS "Allow authenticated read access" ON settings;
+CREATE POLICY "Allow authenticated read access" ON settings FOR SELECT TO authenticated USING (true);
+DROP POLICY IF EXISTS "Allow authenticated read access" ON role_permissions;
+CREATE POLICY "Allow authenticated read access" ON role_permissions FOR SELECT TO authenticated USING (true);
 
 -- Allow all authenticated users to insert
 DROP POLICY IF EXISTS "Allow authenticated insert" ON employees;
@@ -89,6 +117,10 @@ DROP POLICY IF EXISTS "Allow authenticated insert" ON asset_history;
 CREATE POLICY "Allow authenticated insert" ON asset_history FOR INSERT TO authenticated WITH CHECK (true);
 DROP POLICY IF EXISTS "Allow authenticated insert" ON repair_logs;
 CREATE POLICY "Allow authenticated insert" ON repair_logs FOR INSERT TO authenticated WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow authenticated insert" ON settings;
+CREATE POLICY "Allow authenticated insert" ON settings FOR INSERT TO authenticated WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow authenticated insert" ON role_permissions;
+CREATE POLICY "Allow authenticated insert" ON role_permissions FOR INSERT TO authenticated WITH CHECK (true);
 
 -- Allow all authenticated users to update
 DROP POLICY IF EXISTS "Allow authenticated update" ON employees;
@@ -99,17 +131,22 @@ DROP POLICY IF EXISTS "Allow authenticated update" ON asset_history;
 CREATE POLICY "Allow authenticated update" ON asset_history FOR UPDATE TO authenticated USING (true);
 DROP POLICY IF EXISTS "Allow authenticated update" ON repair_logs;
 CREATE POLICY "Allow authenticated update" ON repair_logs FOR UPDATE TO authenticated USING (true);
+DROP POLICY IF EXISTS "Allow authenticated update" ON settings;
+CREATE POLICY "Allow authenticated update" ON settings FOR UPDATE TO authenticated USING (true);
+DROP POLICY IF EXISTS "Allow authenticated update" ON role_permissions;
+CREATE POLICY "Allow authenticated update" ON role_permissions FOR UPDATE TO authenticated USING (true);
 
 -- Trigger to auto-create public.users profile when a new auth user is created in Supabase
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
 BEGIN
-  INSERT INTO public.users (id, name, department, role)
+  INSERT INTO public.users (id, name, department, role, email)
   VALUES (
     new.id, 
     COALESCE(new.raw_user_meta_data->>'name', 'User'), 
     new.raw_user_meta_data->>'department',
-    COALESCE(new.raw_user_meta_data->>'role', 'user')
+    COALESCE(new.raw_user_meta_data->>'role', 'user'),
+    new.email
   );
   RETURN new;
 END;
@@ -143,3 +180,4 @@ CREATE INDEX IF NOT EXISTS idx_asset_history_from_user_id ON asset_history(from_
 CREATE INDEX IF NOT EXISTS idx_asset_history_to_user_id ON asset_history(to_user_id);
 CREATE INDEX IF NOT EXISTS idx_repair_logs_asset_id ON repair_logs(asset_id);
 CREATE INDEX IF NOT EXISTS idx_repair_logs_status ON repair_logs(status);
+CREATE INDEX IF NOT EXISTS idx_assets_part_of_id ON assets(part_of_id);

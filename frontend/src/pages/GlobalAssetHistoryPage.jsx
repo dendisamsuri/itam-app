@@ -5,9 +5,11 @@ import {
     Box, Typography, Table, TableBody, TableCell, TableContainer,
     TableHead, TableRow, Paper, CircularProgress, Alert, TextField, InputAdornment,
     FormControl, InputLabel, Select, MenuItem, Grid, TablePagination, useTheme, useMediaQuery,
-    Card, CardContent, Divider, Chip, Stack
+    Card, CardContent, Divider, Chip, Stack, Button
 } from '@mui/material';
 import { Search as SearchIcon } from '@mui/icons-material';
+import PageContainer from '../components/PageContainer';
+import PageHeader from '../components/PageHeader';
 
 function GlobalAssetHistoryPage() {
     const theme = useTheme();
@@ -19,6 +21,12 @@ function GlobalAssetHistoryPage() {
     const [actionFilter, setActionFilter] = useState('');
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
+
+    const [tempSearchQuery, setTempSearchQuery] = useState('');
+    const [tempActionFilter, setTempActionFilter] = useState('');
+    const [tempStartDate, setTempStartDate] = useState('');
+    const [tempEndDate, setTempEndDate] = useState('');
+
     const [totalHistory, setTotalHistory] = useState(0);
     const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(15);
@@ -29,7 +37,7 @@ function GlobalAssetHistoryPage() {
             if (import.meta.env.VITE_APP_ENV === 'local') {
                 const token = localStorage.getItem('token');
                 if (!token) return;
-                const { data } = await apiLocal.get('/history');
+                const { data } = await apiLocal.get('/api/history');
                 setHistory(data || []);
                 setTotalHistory(data?.length || 0);
             } else {
@@ -41,7 +49,7 @@ function GlobalAssetHistoryPage() {
                     .select('*', { count: 'exact' });
 
                 // Server-side filtering
-                if (searchQuery) {
+                if (searchQuery && searchQuery.length >= 3) {
                     query = query.or(`asset_name.ilike.%${searchQuery}%,serial_number.ilike.%${searchQuery}%,from_user.ilike.%${searchQuery}%,to_user.ilike.%${searchQuery}%`);
                 }
                 if (actionFilter) {
@@ -75,9 +83,58 @@ function GlobalAssetHistoryPage() {
     useEffect(() => { fetchHistory(); }, [fetchHistory]);
     useEffect(() => { setPage(0); }, [searchQuery, actionFilter, startDate, endDate]);
 
-    const filteredHistory = history;
+    const handleApplyFilters = () => {
+        if (tempSearchQuery && tempSearchQuery.length > 0 && tempSearchQuery.length < 3) return;
+        setSearchQuery(tempSearchQuery);
+        setActionFilter(tempActionFilter);
+        setStartDate(tempStartDate);
+        setEndDate(tempEndDate);
+        setPage(0);
+    };
 
-    const paginatedHistory = history;
+    const handleClearFilters = () => {
+        setTempSearchQuery('');
+        setTempActionFilter('');
+        setTempStartDate('');
+        setTempEndDate('');
+        setSearchQuery('');
+        setActionFilter('');
+        setStartDate('');
+        setEndDate('');
+        setPage(0);
+    };
+
+    const filteredHistory = useMemo(() => {
+        if (import.meta.env.VITE_APP_ENV !== 'local') return history;
+
+        return history.filter(h => {
+            const matchesSearch = !searchQuery || searchQuery.length < 3 ||
+                (h.asset_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                    h.serial_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                    h.from_user?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                    h.to_user?.toLowerCase().includes(searchQuery.toLowerCase()));
+
+            const matchesAction = !actionFilter || h.action_type === actionFilter;
+
+            const matchesStartDate = !startDate || new Date(h.created_at) >= new Date(startDate);
+            const matchesEndDate = !endDate || new Date(h.created_at) <= new Date(endDate + 'T23:59:59');
+
+            return matchesSearch && matchesAction && matchesStartDate && matchesEndDate;
+        });
+    }, [history, searchQuery, actionFilter, startDate, endDate]);
+
+    useEffect(() => {
+        if (import.meta.env.VITE_APP_ENV === 'local') {
+            setTotalHistory(filteredHistory.length);
+        }
+    }, [filteredHistory]);
+
+    const paginatedHistory = useMemo(() => {
+        if (import.meta.env.VITE_APP_ENV !== 'local') return history;
+        const from = page * rowsPerPage;
+        const to = from + rowsPerPage;
+        return filteredHistory.slice(from, to);
+    }, [filteredHistory, history, page, rowsPerPage]);
 
     if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress /></Box>;
 
@@ -85,29 +142,45 @@ function GlobalAssetHistoryPage() {
     const formatDate = (dateString) => dateString ? new Date(dateString).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
 
     return (
-        <Box>
-            <Typography variant="h5" fontWeight={600} mb={3}>Asset History</Typography>
+        <PageContainer>
+            <PageHeader
+                title="Global Asset History"
+                subtitle="Track all asset assignments and changes across the organization."
+            />
             {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
 
             <Paper variant="outlined" sx={{ p: 2, mb: 3 }}>
                 <Grid container spacing={2}>
-                    <Grid size={{ xs: 12, md: 4 }}>
-                        <TextField fullWidth size="small" placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }} />
+                    <Grid size={{ xs: 12, md: 2.5 }}>
+                        <TextField fullWidth size="small" placeholder="Search..." value={tempSearchQuery} onChange={(e) => setTempSearchQuery(e.target.value)} InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }} onKeyPress={(e) => e.key === 'Enter' && handleApplyFilters()} />
+                        {tempSearchQuery && tempSearchQuery.length > 0 && tempSearchQuery.length < 3 && (
+                            <Typography variant="caption" color="error">Min. 3 characters</Typography>
+                        )}
                     </Grid>
-                    <Grid size={{ xs: 12, sm: 4, md: 3 }}>
-                        <FormControl fullWidth size="small">
-                            <InputLabel>Action Type</InputLabel>
-                            <Select value={actionFilter} label="Action Type" onChange={(e) => setActionFilter(e.target.value)}>
-                                <MenuItem value=""><em>All</em></MenuItem>
-                                {actionOptions.map(action => <MenuItem key={action} value={action}>{action}</MenuItem>)}
-                            </Select>
-                        </FormControl>
+                    <Grid size={{ xs: 12, sm: 4, md: 2.5 }}>
+                        <TextField
+                            select
+                            label="Action Type"
+                            fullWidth
+                            size="small"
+                            value={tempActionFilter}
+                            onChange={(e) => setTempActionFilter(e.target.value)}
+                        >
+                            <MenuItem value=""><em>All</em></MenuItem>
+                            {actionOptions.map(action => <MenuItem key={action} value={action}>{action}</MenuItem>)}
+                        </TextField>
+                    </Grid>
+                    <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+                        <TextField fullWidth size="small" type="date" label="Start Date" InputLabelProps={{ shrink: true }} value={tempStartDate} onChange={(e) => setTempStartDate(e.target.value)} />
                     </Grid>
                     <Grid size={{ xs: 6, sm: 4, md: 2.5 }}>
-                        <TextField fullWidth size="small" type="date" label="Start Date" InputLabelProps={{ shrink: true }} value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                        <TextField fullWidth size="small" type="date" label="End Date" InputLabelProps={{ shrink: true }} value={tempEndDate} onChange={(e) => setTempEndDate(e.target.value)} />
                     </Grid>
-                    <Grid size={{ xs: 6, sm: 4, md: 2.5 }}>
-                        <TextField fullWidth size="small" type="date" label="End Date" InputLabelProps={{ shrink: true }} value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+                    <Grid size={{ xs: 12, sm: 12, md: 2.5 }}>
+                        <Stack direction="row" spacing={1}>
+                            <Button variant="contained" onClick={handleApplyFilters} fullWidth disableElevation size="small">Search</Button>
+                            <Button variant="outlined" onClick={handleClearFilters} size="small">Clear</Button>
+                        </Stack>
                     </Grid>
                 </Grid>
             </Paper>
@@ -221,7 +294,7 @@ function GlobalAssetHistoryPage() {
             {totalHistory > 0 && (
                 <TablePagination component="div" count={totalHistory} page={page} onPageChange={(_, newP) => setPage(newP)} rowsPerPage={rowsPerPage} onRowsPerPageChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); }} rowsPerPageOptions={[15, 30, 50]} />
             )}
-        </Box>
+        </PageContainer>
     );
 }
 

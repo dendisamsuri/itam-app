@@ -32,7 +32,7 @@ function RegisterPage() {
     setLoading(true);
     try {
       if (import.meta.env.VITE_APP_ENV === 'local') {
-        await apiLocal.post('/register', {
+        await apiLocal.post('/api/register', {
           name,
           department,
           username,
@@ -134,16 +134,16 @@ function RegisterPage() {
 
           <Box component="form" onSubmit={handleRegister}>
             <TextField fullWidth label="Full Name" value={name} onChange={(e) => setName(e.target.value)}
-              required autoFocus sx={{ mb: 2 }} />
+              required autoFocus autoComplete="name" sx={{ mb: 2 }} />
             <TextField fullWidth label="Department" value={department} onChange={(e) => setDepartment(e.target.value)}
               sx={{ mb: 2 }} />
             <TextField fullWidth label="Username" value={username} onChange={(e) => setUsername(e.target.value)}
-              required sx={{ mb: 2 }} />
+              required autoComplete="username" sx={{ mb: 2 }} />
             <TextField
               fullWidth label="Password"
               type={showPassword ? 'text' : 'password'}
               value={password} onChange={(e) => setPassword(e.target.value)}
-              required sx={{ mb: 3 }}
+              required autoComplete="new-password" sx={{ mb: 3 }}
               InputProps={{
                 endAdornment: (
                   <InputAdornment position="end">

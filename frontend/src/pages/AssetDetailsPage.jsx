@@ -5,18 +5,22 @@ import apiLocal from '../apiLocal';
 import {
     Paper, Typography, TextField, Button, Box, Grid, Alert,
     Divider, InputAdornment, Skeleton, Snackbar, IconButton,
-    useTheme, useMediaQuery, Stack, Chip
+    useTheme, useMediaQuery, Stack, Chip, Autocomplete
 } from '@mui/material';
 import {
     SaveOutlined as SaveIcon,
     Inventory2Outlined as InventoryIcon,
     QrCode2 as BarcodeIcon,
-    ArrowBack as ArrowBackIcon,
     EditOutlined as EditIcon,
-    Close as CloseIcon
+    Close as CloseIcon,
+    FileDownload as DownloadIcon,
+    AccountTreeOutlined as HierarchyIcon
 } from '@mui/icons-material';
 import Barcode from 'react-barcode';
 import { getUserPayload } from '../utils/auth.js';
+import PageContainer from '../components/PageContainer';
+import PageHeader from '../components/PageHeader';
+import { usePermissions } from '../PermissionsContext';
 
 const fields = [
     { name: 'serial_number', label: 'Serial Number (SN)', required: true, xs: 12 },
@@ -34,11 +38,14 @@ function AssetDetailsPage() {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'md'));
-
     const [formData, setFormData] = useState({
         serial_number: '', name: '', brand: '', model: '', specs: '',
-        photo_url: '', purchase_date: '', warranty_expiry: ''
+        photo_url: '', purchase_date: '', warranty_expiry: '',
+        part_of_id: '', part_of_name: '', part_of_brand: '', part_of_serial: '', part_of_owner: ''
     });
+    const [originalAsset, setOriginalAsset] = useState(null);
+    const [subAssets, setSubAssets] = useState([]);
+
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -46,9 +53,10 @@ function AssetDetailsPage() {
     const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
     const [isEditing, setIsEditing] = useState(false);
 
+    const { canWrite, userRole } = usePermissions();
     const [user, setUser] = useState(null);
-    const isSuperAdmin = user?.role === 'superadmin';
-    const isAdmin = user?.role === 'admin';
+    const isSuperAdmin = userRole === 'superadmin';
+    const hasWriteAccess = canWrite('asset_list') || isSuperAdmin;
 
     useEffect(() => {
         getUserPayload().then(u => setUser(u));
@@ -61,7 +69,7 @@ function AssetDetailsPage() {
                 const token = localStorage.getItem('token');
                 if (!token) { navigate('/login'); return; }
 
-                const { data: asset } = await apiLocal.get(`/assets/${assetId}`);
+                const { data: asset } = await apiLocal.get(`/api/assets/${assetId}`);
 
                 // Format dates for input type="date"
                 if (asset.purchase_date) asset.purchase_date = asset.purchase_date.split('T')[0];
@@ -75,15 +83,21 @@ function AssetDetailsPage() {
                     specs: asset.specs || '',
                     photo_url: asset.photo_url || '',
                     purchase_date: asset.purchase_date || '',
-                    warranty_expiry: asset.warranty_expiry || ''
+                    warranty_expiry: asset.warranty_expiry || '',
+                    part_of_id: asset.part_of_id || '',
+                    part_of_name: asset.part_of_name || '',
+                    part_of_brand: asset.part_of_brand || '',
+                    part_of_serial: asset.part_of_serial || '',
+                    part_of_owner: asset.part_of_owner || ''
                 });
+                setOriginalAsset(asset);
             } else {
                 const { data: { session } } = await supabase.auth.getSession();
                 if (!session) { navigate('/login'); return; }
 
                 const { data: asset, error: fetchErr } = await supabase
                     .from('assets')
-                    .select('*')
+                    .select('*, parent:part_of_id(id, name, serial_number, brand, assigned_to)')
                     .eq('id', assetId)
                     .single();
 
@@ -93,6 +107,7 @@ function AssetDetailsPage() {
                 if (asset.purchase_date) asset.purchase_date = asset.purchase_date.split('T')[0];
                 if (asset.warranty_expiry) asset.warranty_expiry = asset.warranty_expiry.split('T')[0];
 
+                const parent = Array.isArray(asset.parent) ? asset.parent[0] : asset.parent;
                 setFormData({
                     serial_number: asset.serial_number || '',
                     name: asset.name || '',
@@ -101,8 +116,14 @@ function AssetDetailsPage() {
                     specs: asset.specs || '',
                     photo_url: asset.photo_url || '',
                     purchase_date: asset.purchase_date || '',
-                    warranty_expiry: asset.warranty_expiry || ''
+                    warranty_expiry: asset.warranty_expiry || '',
+                    part_of_id: asset.part_of_id || '',
+                    part_of_name: parent?.name || '',
+                    part_of_brand: parent?.brand || '',
+                    part_of_serial: parent?.serial_number || '',
+                    part_of_owner: parent?.assigned_to || ''
                 });
+                setOriginalAsset(asset);
             }
         } catch (err) {
             setError(err.message || 'Failed to load asset details.');
@@ -116,6 +137,30 @@ function AssetDetailsPage() {
         fetchAssetDetails();
     }, [fetchAssetDetails]);
 
+    const fetchSubAssets = useCallback(async () => {
+        try {
+            if (import.meta.env.VITE_APP_ENV === 'local') {
+                const { data } = await apiLocal.get(`/api/assets/${assetId}/children`);
+                setSubAssets(data);
+            } else {
+                const { data, error } = await supabase
+                    .from('assets')
+                    .select('*')
+                    .eq('part_of_id', assetId);
+                if (error) throw error;
+                setSubAssets(data);
+            }
+        } catch (err) {
+            console.error('Failed to fetch sub-assets:', err);
+        }
+    }, [assetId]);
+
+
+
+    useEffect(() => {
+        fetchSubAssets();
+    }, [fetchSubAssets]);
+
     const handleInputChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
@@ -128,7 +173,7 @@ function AssetDetailsPage() {
 
         try {
             if (import.meta.env.VITE_APP_ENV === 'local') {
-                const { error: updErr } = await apiLocal.put(`/assets/${assetId}`, {
+                const { error: updErr } = await apiLocal.put(`/api/assets/${assetId}`, {
                     ...formData
                 });
                 if (updErr) throw updErr;
@@ -159,9 +204,20 @@ function AssetDetailsPage() {
         }
     };
 
+    const handleDownloadBarcode = () => {
+        const canvas = document.querySelector('canvas');
+        if (canvas) {
+            const url = canvas.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.download = `barcode-${formData.serial_number}.png`;
+            link.href = url;
+            link.click();
+        }
+    };
+
     if (loading) {
         return (
-            <Box className="fade-in-up">
+            <PageContainer>
                 <Box sx={{ mb: 3 }}>
                     <Skeleton variant="text" width="40%" height={48} />
                     <Skeleton variant="text" width="60%" height={24} />
@@ -174,71 +230,39 @@ function AssetDetailsPage() {
                         <Skeleton variant="rectangular" height={500} sx={{ borderRadius: 6 }} />
                     </Grid>
                 </Grid>
-            </Box>
+            </PageContainer>
         );
     }
 
     return (
-        <Box className="fade-in-up">
-            {/* Page Header */}
-            <Box sx={{ display: 'flex', alignItems: { xs: 'flex-start', sm: 'center' }, gap: { xs: 1.5, sm: 2.5 }, mb: 4, flexWrap: 'wrap', flexDirection: { xs: 'column', sm: 'row' } }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: { xs: '100%', sm: 'auto' } }}>
-                    <IconButton
-                        onClick={() => navigate('/')}
-                        sx={{
-                            bgcolor: 'background.paper',
-                            border: '1px solid',
-                            borderColor: 'divider',
-                            flexShrink: 0,
-                            width: { xs: 40, sm: 48 },
-                            height: { xs: 40, sm: 48 },
-                            boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
-                        }}
-                    >
-                        <ArrowBackIcon fontSize={isMobile ? 'small' : 'medium'} />
-                    </IconButton>
-                    <Typography variant={isMobile ? 'h5' : 'h4'} sx={{ fontWeight: 900, letterSpacing: '-0.03em' }}>
-                        Asset Details
-                    </Typography>
-                </Box>
-
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, ml: { xs: 0, sm: 'auto' }, width: { xs: '100%', sm: 'auto' }, justifyContent: { xs: 'flex-start', sm: 'flex-end' } }}>
-                    {(isSuperAdmin || isAdmin) && !isEditing && (
-                        <Button
-                            variant="contained"
-                            startIcon={<EditIcon />}
-                            onClick={() => setIsEditing(true)}
-                            sx={{ borderRadius: '12px', px: { xs: 2, sm: 3 } }}
-                            size={isMobile ? 'small' : 'medium'}
-                        >
-                            Edit
-                        </Button>
-                    )}
-                    {isEditing && (
-                        <Button
-                            color="error"
-                            variant="outlined"
-                            startIcon={<CloseIcon />}
-                            onClick={() => { setIsEditing(false); fetchAssetDetails(); }}
-                            sx={{ borderRadius: '12px', px: { xs: 2, sm: 3 } }}
-                            size={isMobile ? 'small' : 'medium'}
-                        >
-                            Cancel
-                        </Button>
-                    )}
-                    <Chip
-                        label={formData.serial_number}
-                        size="medium"
-                        variant="outlined"
-                        sx={{
-                            fontWeight: 700,
-                            borderColor: 'primary.light',
-                            bgcolor: 'primary.lighter',
-                            display: { xs: 'none', md: 'inline-flex' }
-                        }}
-                    />
-                </Box>
-            </Box>
+        <PageContainer>
+            <PageHeader
+                title="Asset Details"
+                subtitle={formData.serial_number}
+                backPath="/"
+                action={
+                    hasWriteAccess ? (
+                        isEditing ? (
+                            <Button
+                                color="error"
+                                variant="outlined"
+                                startIcon={<CloseIcon />}
+                                onClick={() => { setIsEditing(false); fetchAssetDetails(); }}
+                            >
+                                Cancel
+                            </Button>
+                        ) : (
+                            <Button
+                                variant="contained"
+                                startIcon={<EditIcon />}
+                                onClick={() => setIsEditing(true)}
+                            >
+                                Edit
+                            </Button>
+                        )
+                    ) : null
+                }
+            />
 
             {error && <Alert severity="error" sx={{ mb: 3, borderRadius: '16px', boxShadow: '0 4px 15px rgba(0,0,0,0.05)' }}>{error}</Alert>}
 
@@ -249,9 +273,9 @@ function AssetDetailsPage() {
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 4 }}>
                             <Box sx={{
                                 width: 44, height: 44, borderRadius: '14px',
-                                background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+                                bgcolor: 'primary.main',
                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                boxShadow: '0 8px 16px -4px rgba(99, 102, 241, 0.4)'
+                                boxShadow: '0 8px 16px -4px rgba(0, 0, 0, 0.1)'
                             }}>
                                 <InventoryIcon sx={{ color: '#fff', fontSize: 22 }} />
                             </Box>
@@ -297,6 +321,25 @@ function AssetDetailsPage() {
                                         />
                                     </Grid>
                                 ))}
+
+                                <Grid size={12}>
+                                    <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700, mb: 1, display: 'block', ml: 0.5 }}>
+                                        Part of (Parent Asset)
+                                    </Typography>
+                                    <TextField
+                                        fullWidth
+                                        value={formData.part_of_name ? `${formData.part_of_name} - ${formData.part_of_brand} (${formData.part_of_serial})` : 'None'}
+                                        disabled
+                                        sx={{
+                                            '& .MuiInputBase-root': {
+                                                height: 54,
+                                                borderRadius: '12px',
+                                                bgcolor: 'rgba(0,0,0,0.02)'
+                                            }
+                                        }}
+                                    />
+                                </Grid>
+
                                 <Grid size={12}>
                                     <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700, mb: 1, display: 'block', ml: 0.5 }}>
                                         Specifications (e.g., Core i5, 16GB RAM)
@@ -361,11 +404,20 @@ function AssetDetailsPage() {
                                 {formData.serial_number ? (
                                     <>
                                         <Box sx={{ p: 1, bgcolor: '#fff', borderRadius: '8px', border: '1px solid #eee' }}>
-                                            <Barcode value={formData.serial_number} width={1.8} height={80} fontSize={14} background="#fff" />
+                                            <Barcode value={formData.serial_number} width={1.8} height={80} fontSize={14} background="#fff" renderer="canvas" />
                                         </Box>
                                         <Typography variant="caption" sx={{ mt: 3, color: 'text.disabled', fontWeight: 800, letterSpacing: '0.15em', textTransform: 'uppercase', fontSize: '0.65rem' }}>
                                             Unit Inventory Identity
                                         </Typography>
+                                        <Button
+                                            variant="outlined"
+                                            size="small"
+                                            startIcon={<DownloadIcon />}
+                                            onClick={handleDownloadBarcode}
+                                            sx={{ mt: 2, borderRadius: '10px' }}
+                                        >
+                                            Download Barcode
+                                        </Button>
                                     </>
                                 ) : (
                                     <Typography color="text.secondary" fontWeight={500}>Input SN to generate barcode</Typography>
@@ -396,6 +448,47 @@ function AssetDetailsPage() {
                                 />
                             </Paper>
                         )}
+
+                        {subAssets.length > 0 && (
+                            <Paper className="glassmorphism" sx={{ p: { xs: 3, sm: 4 }, borderRadius: '24px' }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 4 }}>
+                                    <Box sx={{
+                                        width: 44, height: 44, borderRadius: '14px',
+                                        background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        boxShadow: '0 8px 16px -4px rgba(59, 130, 246, 0.4)'
+                                    }}>
+                                        <HierarchyIcon sx={{ color: '#fff', fontSize: 22 }} />
+                                    </Box>
+                                    <Typography variant="h5" fontWeight={800} letterSpacing="-0.01em">Included Parts</Typography>
+                                </Box>
+                                <Divider sx={{ mb: 4, opacity: 0.6 }} />
+                                <Stack spacing={2}>
+                                    {subAssets.map((asset) => (
+                                        <Box
+                                            key={asset.id}
+                                            onClick={() => navigate(`/assets/${asset.id}`)}
+                                            sx={{
+                                                p: 2,
+                                                borderRadius: '12px',
+                                                bgcolor: 'rgba(0,0,0,0.02)',
+                                                cursor: 'pointer',
+                                                border: '1px solid transparent',
+                                                transition: 'all 0.2s ease',
+                                                '&:hover': {
+                                                    bgcolor: 'rgba(0,0,0,0.04)',
+                                                    borderColor: 'primary.main',
+                                                    transform: 'translateX(4px)'
+                                                }
+                                            }}
+                                        >
+                                            <Typography variant="subtitle2" fontWeight={700}>{asset.name} - {asset.brand}</Typography>
+                                            <Typography variant="caption" color="text.secondary">{asset.serial_number}</Typography>
+                                        </Box>
+                                    ))}
+                                </Stack>
+                            </Paper>
+                        )}
                     </Stack>
                 </Grid>
             </Grid>
@@ -410,7 +503,7 @@ function AssetDetailsPage() {
                     {snackbar.message}
                 </Alert>
             </Snackbar>
-        </Box>
+        </PageContainer >
     );
 }
 

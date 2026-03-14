@@ -15,9 +15,11 @@ apiLocal.interceptors.request.use((config) => {
 apiLocal.interceptors.response.use(
     (response) => response,
     (error) => {
-        if (error.response && error.response.status === 400 || error.response.status === 401) {
+        const isLoginRequest = error.config && error.config.url && (error.config.url === '/login' || error.config.url.endsWith('/login'));
+
+        if (error.response && (error.response.status === 400 || error.response.status === 401)) {
             const errorMsg = error.response.data?.error;
-            if (errorMsg === 'Token expired' || errorMsg === 'Token tidak valid' || error.response.status === 401) {
+            if ((errorMsg === 'Token expired' || errorMsg === 'Token tidak valid' || error.response.status === 401) && !isLoginRequest) {
                 localStorage.removeItem('token');
                 window.location.href = '/login';
             }

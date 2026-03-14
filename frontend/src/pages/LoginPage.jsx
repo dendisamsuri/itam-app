@@ -26,7 +26,7 @@ function LoginPage() {
     setLoading(true);
     try {
       if (import.meta.env.VITE_APP_ENV === 'local') {
-        const { data } = await apiLocal.post('/login', {
+        const { data } = await apiLocal.post('/api/login', {
           username,
           password
         });
@@ -58,7 +58,7 @@ function LoginPage() {
   };
 
   return (
-    <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', p: 2, bgcolor: '#f1f5f9' }}>
+    <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', p: 2 }}>
       <Paper elevation={2} sx={{ width: '100%', maxWidth: 400, borderRadius: 2, overflow: 'hidden' }}>
         <Box sx={{ bgcolor: 'primary.main', py: 4, px: 3, textAlign: 'center', color: 'white' }}>
           <InventoryIcon sx={{ fontSize: 48, mb: 1 }} />
@@ -76,11 +76,13 @@ function LoginPage() {
             <TextField
               fullWidth label="Username" name="username" autoFocus
               value={username} onChange={(e) => setUsername(e.target.value)}
+              autoComplete="username"
               sx={{ mb: 2 }}
             />
             <TextField
               fullWidth label="Password" name="password" type={showPassword ? 'text' : 'password'}
               value={password} onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
               sx={{ mb: 4 }}
               InputProps={{
                 endAdornment: (

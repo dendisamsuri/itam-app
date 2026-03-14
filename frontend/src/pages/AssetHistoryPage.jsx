@@ -6,7 +6,7 @@ import {
     TableContainer, TableHead, TableRow, Paper, CircularProgress, Alert,
     Chip, TextField, InputAdornment, MenuItem, Select, FormControl,
     InputLabel, Stack, TablePagination, IconButton, Tooltip,
-    useTheme, useMediaQuery, Grid
+    useTheme, useMediaQuery, Grid, Button
 } from '@mui/material';
 import {
     Search as SearchIcon,
@@ -19,6 +19,8 @@ import {
     History as HistoryIcon,
 } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
+import PageContainer from '../components/PageContainer';
+import PageHeader from '../components/PageHeader';
 
 const ACTION_CONFIG = {
     HANDOVER: { color: 'primary', label: 'Handover', icon: <TransferIcon sx={{ fontSize: 13 }} /> },
@@ -117,6 +119,12 @@ export default function AssetHistoryPage() {
     const [actionFilter, setActionFilter] = useState('');
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
+
+    const [tempSearch, setTempSearch] = useState('');
+    const [tempActionFilter, setTempActionFilter] = useState('');
+    const [tempStartDate, setTempStartDate] = useState('');
+    const [tempEndDate, setTempEndDate] = useState('');
+
     const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(10);
 
@@ -126,7 +134,7 @@ export default function AssetHistoryPage() {
             if (import.meta.env.VITE_APP_ENV === 'local') {
                 const token = localStorage.getItem('token');
                 if (!token) { navigate('/login'); return; }
-                const { data } = await apiLocal.get(`/assets/${assetId}/history`);
+                const { data } = await apiLocal.get(`/api/assets/${assetId}/history`);
                 setAsset(data.asset);
                 setHistory((data.history || []).map(h => ({
                     ...h,
@@ -158,7 +166,7 @@ export default function AssetHistoryPage() {
                     query = query.lte('created_at', endDate + 'T23:59:59');
                 }
                 // Search filter (limited support for multi-column search in standard query, but we can try)
-                if (search) {
+                if (search && search.length >= 3) {
                     query = query.or(`from_user.ilike.%${search}%,to_user.ilike.%${search}%,notes.ilike.%${search}%`);
                 }
 
@@ -187,6 +195,27 @@ export default function AssetHistoryPage() {
 
     useEffect(() => { fetchHistory(); }, [fetchHistory]);
 
+    const handleApplyFilters = () => {
+        if (tempSearch && tempSearch.length > 0 && tempSearch.length < 3) return;
+        setSearch(tempSearch);
+        setActionFilter(tempActionFilter);
+        setStartDate(tempStartDate);
+        setEndDate(tempEndDate);
+        setPage(0);
+    };
+
+    const handleClearFilters = () => {
+        setTempSearch('');
+        setTempActionFilter('');
+        setTempStartDate('');
+        setTempEndDate('');
+        setSearch('');
+        setActionFilter('');
+        setStartDate('');
+        setEndDate('');
+        setPage(0);
+    };
+
     const formatDate = (ds, short = false) => {
         if (!ds) return '—';
         const d = new Date(ds);
@@ -194,9 +223,38 @@ export default function AssetHistoryPage() {
         return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     };
 
-    const filtered = history;
+    const filtered = React.useMemo(() => {
+        if (import.meta.env.VITE_APP_ENV !== 'local') return history;
 
-    const paginated = history;
+        return history.filter(h => {
+            const matchesSearch = !search || search.length < 3 ||
+                (h.from_user?.toLowerCase().includes(search.toLowerCase()) ||
+                    h.to_user?.toLowerCase().includes(search.toLowerCase()) ||
+                    h.notes?.toLowerCase().includes(search.toLowerCase()) ||
+                    h.asset_name?.toLowerCase().includes(search.toLowerCase()) ||
+                    h.serial_number?.toLowerCase().includes(search.toLowerCase()));
+
+            const matchesAction = !actionFilter || h.action_type === actionFilter;
+
+            const matchesStartDate = !startDate || new Date(h.created_at) >= new Date(startDate);
+            const matchesEndDate = !endDate || new Date(h.created_at) <= new Date(endDate + 'T23:59:59');
+
+            return matchesSearch && matchesAction && matchesStartDate && matchesEndDate;
+        });
+    }, [history, search, actionFilter, startDate, endDate]);
+
+    useEffect(() => {
+        if (import.meta.env.VITE_APP_ENV === 'local') {
+            setTotalHistory(filtered.length);
+        }
+    }, [filtered]);
+
+    const paginated = React.useMemo(() => {
+        if (import.meta.env.VITE_APP_ENV !== 'local') return history;
+        const from = page * rowsPerPage;
+        const to = from + rowsPerPage;
+        return filtered.slice(from, to);
+    }, [filtered, history, page, rowsPerPage]);
     const actionTypes = [...new Set(history.map(h => h.action_type?.toUpperCase()).filter(Boolean))];
     const hasFilter = search || actionFilter || startDate || endDate;
 
@@ -207,20 +265,12 @@ export default function AssetHistoryPage() {
     );
 
     return (
-        <Box sx={{ maxWidth: 1100, mx: 'auto', px: { xs: 2, sm: 3 }, py: { xs: 2.5, sm: 4 } }}>
-
-            {/* Header */}
-            <Stack direction="row" alignItems="center" spacing={1.5} mb={0.5}>
-                <Box sx={{ p: 0.875, bgcolor: 'primary.lighter', borderRadius: 2, display: 'flex' }}>
-                    <HistoryIcon sx={{ color: 'primary.main', fontSize: 22 }} />
-                </Box>
-                <Typography variant={isMobile ? 'h6' : 'h5'} fontWeight={800} letterSpacing="-0.02em">
-                    Asset History
-                </Typography>
-            </Stack>
-            <Typography variant="body2" color="text.secondary" mb={3}>
-                Rekap seluruh aktivitas perpindahan dan perubahan aset
-            </Typography>
+        <PageContainer sx={{ maxWidth: 1100, mx: 'auto' }}>
+            <PageHeader
+                title="Asset Assignment History"
+                subtitle="Rekap seluruh aktivitas perpindahan dan perubahan aset"
+                backPath="/"
+            />
 
             {error && <Alert severity="error" sx={{ mb: 2.5, borderRadius: 2 }}>{error}</Alert>}
 
@@ -235,48 +285,54 @@ export default function AssetHistoryPage() {
             <Card elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2.5, mb: 3 }}>
                 <CardContent sx={{ p: { xs: 1.5, sm: 2 }, '&:last-child': { pb: { xs: 1.5, sm: 2 } } }}>
                     <Grid container spacing={1.5} alignItems="center">
-                        <Grid size={{ xs: 12, sm: 4 }}>
+                        <Grid size={{ xs: 12, sm: 2.5 }}>
                             <TextField fullWidth size="small" placeholder="Cari aset, user, notes…"
-                                value={search} onChange={e => { setSearch(e.target.value); setPage(0); }}
+                                value={tempSearch} onChange={e => setTempSearch(e.target.value)}
                                 InputProps={{
                                     startAdornment: <InputAdornment position="start"><SearchIcon sx={{ fontSize: 18, color: 'text.disabled' }} /></InputAdornment>
                                 }}
+                                onKeyPress={(e) => e.key === 'Enter' && handleApplyFilters()}
                                 sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
                             />
+                            {tempSearch && tempSearch.length > 0 && tempSearch.length < 3 && (
+                                <Typography variant="caption" color="error">Min. 3 karakter</Typography>
+                            )}
                         </Grid>
                         <Grid size={{ xs: 6, sm: 2.5 }}>
-                            <FormControl fullWidth size="small">
-                                <InputLabel>Action</InputLabel>
-                                <Select value={actionFilter} label="Action"
-                                    onChange={e => { setActionFilter(e.target.value); setPage(0); }}
-                                    sx={{ borderRadius: 2 }}>
-                                    <MenuItem value="">Semua</MenuItem>
-                                    {actionTypes.map(a => <MenuItem key={a} value={a}>{a}</MenuItem>)}
-                                </Select>
-                            </FormControl>
+                            <TextField
+                                select
+                                fullWidth
+                                size="small"
+                                value={tempActionFilter}
+                                onChange={e => setTempActionFilter(e.target.value)}
+                                SelectProps={{
+                                    displayEmpty: true,
+                                    renderValue: (value) => value || <Typography color="text.disabled">Action</Typography>
+                                }}
+                                sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+                            >
+                                <MenuItem value="">Semua</MenuItem>
+                                {actionTypes.map(a => <MenuItem key={a} value={a}>{a}</MenuItem>)}
+                            </TextField>
                         </Grid>
                         <Grid size={{ xs: 6, sm: 2 }}>
-                            <TextField fullWidth size="small" type="date" label="Dari" value={startDate}
-                                onChange={e => { setStartDate(e.target.value); setPage(0); }}
+                            <TextField fullWidth size="small" type="date" placeholder="Dari" value={tempStartDate}
+                                onChange={e => setTempStartDate(e.target.value)}
                                 InputLabelProps={{ shrink: true }}
                                 sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />
                         </Grid>
                         <Grid size={{ xs: 6, sm: 2 }}>
-                            <TextField fullWidth size="small" type="date" label="Sampai" value={endDate}
-                                onChange={e => { setEndDate(e.target.value); setPage(0); }}
+                            <TextField fullWidth size="small" type="date" placeholder="Sampai" value={tempEndDate}
+                                onChange={e => setTempEndDate(e.target.value)}
                                 InputLabelProps={{ shrink: true }}
                                 sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />
                         </Grid>
-                        {hasFilter && (
-                            <Grid size={{ xs: 6, sm: "auto" }}>
-                                <Tooltip title="Reset filter">
-                                    <IconButton onClick={() => { setSearch(''); setActionFilter(''); setStartDate(''); setEndDate(''); setPage(0); }}
-                                        size="small" sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
-                                        <ClearAllIcon fontSize="small" />
-                                    </IconButton>
-                                </Tooltip>
-                            </Grid>
-                        )}
+                        <Grid size={{ xs: 12, sm: 3 }}>
+                            <Stack direction="row" spacing={1}>
+                                <Button variant="contained" onClick={handleApplyFilters} fullWidth disableElevation size="small" sx={{ py: 1 }}>Search</Button>
+                                <Button variant="outlined" onClick={handleClearFilters} size="small" sx={{ minWidth: "auto", py: 1 }}><ClearAllIcon fontSize="small" /></Button>
+                            </Stack>
+                        </Grid>
                     </Grid>
                     {hasFilter && (
                         <Typography variant="caption" color="text.secondary" mt={1} display="block">
@@ -385,6 +441,6 @@ export default function AssetHistoryPage() {
                     )}
                 </>
             )}
-        </Box>
+        </PageContainer>
     );
 }
