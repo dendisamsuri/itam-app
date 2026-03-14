@@ -36,11 +36,15 @@ export const getUserPayload = async () => {
 
         // Query public.users table for the authoritative role
         // (user_metadata can be stale or empty if user was created via Supabase dashboard)
-        const { data: profile } = await supabase
+        const { data: profile, error: profileErr } = await supabase
             .from('users')
             .select('role, name')
             .eq('id', user.id)
             .single();
+
+        if (profileErr) {
+            console.error('Failed to fetch user profile for role (RLS issue?):', profileErr);
+        }
 
         return {
             id: user.id,

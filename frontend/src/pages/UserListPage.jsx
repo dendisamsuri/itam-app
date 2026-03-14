@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import apiLocal from '../apiLocal';
+import { supabase } from '../supabaseClient';
 import {
     Box, Typography, Card, CardContent, Table, TableBody, TableCell, TableContainer,
     TableHead, TableRow, Paper, CircularProgress, Alert, Button, Dialog, DialogTitle,
@@ -20,6 +21,8 @@ import { getUserPayload } from '../utils/auth.js';
 import PageContainer from '../components/PageContainer';
 import PageHeader from '../components/PageHeader';
 import { usePermissions } from '../PermissionsContext';
+
+const isLocal = import.meta.env.VITE_APP_ENV === 'local';
 
 function UserListPage() {
     const theme = useTheme();
@@ -61,14 +64,34 @@ function UserListPage() {
     const fetchUsers = useCallback(async () => {
         try {
             setLoading(true);
-            const token = localStorage.getItem('token');
-            if (!token) { navigate('/login'); return; }
 
-            const { data } = await apiLocal.get('/api/users');
-            setUsers(data || []);
+            if (isLocal) {
+                const token = localStorage.getItem('token');
+                if (!token) { navigate('/login'); return; }
+                const { data } = await apiLocal.get('/api/users');
+                setUsers(data || []);
+            } else {
+                const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+                if (sessionError || !session) { 
+                    console.error("Session error or missing:", sessionError);
+                    navigate('/login'); 
+                    return; 
+                }
+
+                const { data, error: fetchErr } = await supabase
+                    .from('users')
+                    .select('id, name, email, department, role')
+                    .is('deleted_at', null)
+                    .order('name');
+
+                if (fetchErr) throw fetchErr;
+                setUsers(data || []);
+            }
         } catch (err) {
+            console.error("fetchUsers error:", err);
             setError(err.message || 'Failed to fetch users.');
-            if (err?.response?.status === 401) navigate('/login');
+            const isAuthError = err?.response?.status === 401 || err?.status === 401 || err?.code === 'PGRST301' || err?.message?.toLowerCase().includes('jwt');
+            if (isAuthError) navigate('/login');
         } finally {
             setLoading(false);
         }
@@ -104,13 +127,19 @@ function UserListPage() {
 
         try {
             setResetLoading(true);
-            await apiLocal.put(`/api/users/${selectedUser.id}/reset-password`, {
-                new_password: newPassword
-            });
-            setSnackbar({ open: true, message: `Password for ${selectedUser.username} has been reset successfully!`, severity: 'success' });
+            if (isLocal) {
+                await apiLocal.put(`/api/users/${selectedUser.id}/reset-password`, {
+                    new_password: newPassword
+                });
+            } else {
+                // In Supabase mode, password reset requires admin API (service_role key)
+                // This is not available from the frontend, so we show a warning
+                throw new Error('Password reset for other users is not available in production mode. Users can reset their own password via "Forgot Password".');
+            }
+            setSnackbar({ open: true, message: `Password for ${selectedUser.name} has been reset successfully!`, severity: 'success' });
             setResetDialogOpen(false);
         } catch (err) {
-            setSnackbar({ open: true, message: err.response?.data?.error || 'Failed to reset password.', severity: 'error' });
+            setSnackbar({ open: true, message: err.response?.data?.error || err.message || 'Failed to reset password.', severity: 'error' });
         } finally {
             setResetLoading(false);
         }
@@ -136,12 +165,25 @@ function UserListPage() {
 
         try {
             setEditLoading(true);
-            await apiLocal.put(`/api/users/${selectedUser.id}`, editForm);
-            setSnackbar({ open: true, message: `User ${selectedUser.username} berhasil diupdate!`, severity: 'success' });
+            if (isLocal) {
+                await apiLocal.put(`/api/users/${selectedUser.id}`, editForm);
+            } else {
+                const { error: updErr } = await supabase
+                    .from('users')
+                    .update({
+                        name: editForm.name,
+                        department: editForm.department || null,
+                        email: editForm.email || null,
+                        role: editForm.role
+                    })
+                    .eq('id', selectedUser.id);
+                if (updErr) throw updErr;
+            }
+            setSnackbar({ open: true, message: `User ${selectedUser.name} berhasil diupdate!`, severity: 'success' });
             setEditDialogOpen(false);
             fetchUsers();
         } catch (err) {
-            setSnackbar({ open: true, message: err.response?.data?.error || 'Failed to update user.', severity: 'error' });
+            setSnackbar({ open: true, message: err.response?.data?.error || err.message || 'Failed to update user.', severity: 'error' });
         } finally {
             setEditLoading(false);
         }
@@ -156,12 +198,20 @@ function UserListPage() {
     const handleDeleteConfirm = async () => {
         try {
             setDeleteLoading(true);
-            await apiLocal.delete(`/api/users/${selectedUser.id}`);
-            setSnackbar({ open: true, message: `User ${selectedUser.username} berhasil dihapus.`, severity: 'success' });
+            if (isLocal) {
+                await apiLocal.delete(`/api/users/${selectedUser.id}`);
+            } else {
+                const { error: delErr } = await supabase
+                    .from('users')
+                    .update({ deleted_at: new Date().toISOString() })
+                    .eq('id', selectedUser.id);
+                if (delErr) throw delErr;
+            }
+            setSnackbar({ open: true, message: `User ${selectedUser.name} berhasil dihapus.`, severity: 'success' });
             setDeleteDialogOpen(false);
             fetchUsers();
         } catch (err) {
-            setSnackbar({ open: true, message: err.response?.data?.error || 'Failed to delete user.', severity: 'error' });
+            setSnackbar({ open: true, message: err.response?.data?.error || err.message || 'Failed to delete user.', severity: 'error' });
         } finally {
             setDeleteLoading(false);
         }
@@ -207,9 +257,11 @@ function UserListPage() {
                     <Button size="small" startIcon={<EditIcon />} onClick={() => handleEditClick(user)} color="primary" sx={{ borderRadius: '8px' }}>
                         Edit
                     </Button>
-                    <Button size="small" startIcon={<LockResetIcon />} onClick={() => handleResetClick(user)} color="warning" sx={{ borderRadius: '8px' }}>
-                        Reset
-                    </Button>
+                    {isLocal && (
+                        <Button size="small" startIcon={<LockResetIcon />} onClick={() => handleResetClick(user)} color="warning" sx={{ borderRadius: '8px' }}>
+                            Reset
+                        </Button>
+                    )}
                     <Button size="small" startIcon={<DeleteIcon />} onClick={() => handleDeleteClick(user)} color="error" sx={{ borderRadius: '8px' }}>
                         Delete
                     </Button>
@@ -222,9 +274,11 @@ function UserListPage() {
                 <IconButton size="small" onClick={() => handleEditClick(user)} color="primary" title="Edit User">
                     <EditIcon fontSize="small" />
                 </IconButton>
-                <IconButton size="small" onClick={() => handleResetClick(user)} color="warning" title="Reset Password">
-                    <LockResetIcon fontSize="small" />
-                </IconButton>
+                {isLocal && (
+                    <IconButton size="small" onClick={() => handleResetClick(user)} color="warning" title="Reset Password">
+                        <LockResetIcon fontSize="small" />
+                    </IconButton>
+                )}
                 <IconButton size="small" onClick={() => handleDeleteClick(user)} color="error" title="Delete User">
                     <DeleteIcon fontSize="small" />
                 </IconButton>
@@ -335,7 +389,7 @@ function UserListPage() {
                                                     {user.name || 'Unknown'}
                                                 </Typography>
                                                 <Typography variant="caption" color="text.secondary">
-                                                    @{user.username}
+                                                    {user.email || (user.username ? `@${user.username}` : 'No email')}
                                                 </Typography>
                                             </Box>
                                         </Box>
@@ -372,7 +426,7 @@ function UserListPage() {
                             <TableHead>
                                 <TableRow>
                                     <TableCell>Name</TableCell>
-                                    <TableCell>Username</TableCell>
+                                    {isLocal && <TableCell>Username</TableCell>}
                                     <TableCell>Email</TableCell>
                                     <TableCell>Department</TableCell>
                                     <TableCell>Role</TableCell>
@@ -397,7 +451,7 @@ function UserListPage() {
                                                     {user.name}
                                                 </Stack>
                                             </TableCell>
-                                            <TableCell sx={{ py: 2 }}>{user.username}</TableCell>
+                                            {isLocal && <TableCell sx={{ py: 2 }}>{user.username}</TableCell>}
                                             <TableCell sx={{ py: 2 }}>{user.email || '-'}</TableCell>
                                             <TableCell sx={{ py: 2 }}>{user.department || '-'}</TableCell>
                                             <TableCell sx={{ py: 2 }}>
@@ -440,7 +494,7 @@ function UserListPage() {
                 <DialogTitle sx={{ fontWeight: 700 }}>Reset Password</DialogTitle>
                 <DialogContent>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                        Are you sure you want to reset password for <strong>{selectedUser?.name}</strong> (@{selectedUser?.username})?
+                        Are you sure you want to reset password for <strong>{selectedUser?.name}</strong>?
                     </Typography>
                     <TextField
                         fullWidth
@@ -474,7 +528,7 @@ function UserListPage() {
                 <DialogTitle sx={{ fontWeight: 700 }}>Edit User</DialogTitle>
                 <DialogContent>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                        Editing user <strong>@{selectedUser?.username}</strong>
+                        Editing user <strong>{selectedUser?.name}</strong>
                     </Typography>
                     <Stack spacing={2}>
                         <TextField
@@ -531,7 +585,7 @@ function UserListPage() {
                 <DialogTitle sx={{ fontWeight: 700, color: 'error.main' }}>Delete User</DialogTitle>
                 <DialogContent>
                     <Typography variant="body2" color="text.secondary">
-                        Are you sure you want to delete user <strong>{selectedUser?.name}</strong> (@{selectedUser?.username})?
+                        Are you sure you want to delete user <strong>{selectedUser?.name}</strong>?
                     </Typography>
                     <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
                         This action will deactivate the user account. The data will not be permanently removed.
