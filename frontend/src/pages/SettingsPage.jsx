@@ -207,8 +207,11 @@ function SettingsPage() {
                                         <TextField
                                             select
                                             fullWidth
+                                            name="it_user_id"
                                             value={settings.it_user_id}
                                             onChange={(e) => setSettings({ ...settings, it_user_id: e.target.value })}
+                                            SelectProps={{ MenuProps: { disableScrollLock: true, disablePortal: true } }}
+                                            inputProps={{ autoComplete: 'off' }}
                                             sx={{ '& .MuiInputBase-root': { borderRadius: '12px', height: 54 } }}
                                         >
                                             <MenuItem value=""><em>Select Employee</em></MenuItem>
@@ -228,8 +231,11 @@ function SettingsPage() {
                                         <TextField
                                             select
                                             fullWidth
+                                            name="ga_user_id"
                                             value={settings.ga_user_id}
                                             onChange={(e) => setSettings({ ...settings, ga_user_id: e.target.value })}
+                                            SelectProps={{ MenuProps: { disableScrollLock: true, disablePortal: true } }}
+                                            inputProps={{ autoComplete: 'off' }}
                                             sx={{ '& .MuiInputBase-root': { borderRadius: '12px', height: 54 } }}
                                         >
                                             <MenuItem value=""><em>Select Employee</em></MenuItem>
@@ -424,6 +430,7 @@ function SettingsPage() {
                 autoHideDuration={4000}
                 onClose={() => setSnackbar({ ...snackbar, open: false })}
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+                disableWindowBlurListener
             >
                 <Alert severity={snackbar.severity} sx={{ borderRadius: '12px', boxShadow: '0 8px 30px rgba(0,0,0,0.1)' }}>
                     {snackbar.message}
