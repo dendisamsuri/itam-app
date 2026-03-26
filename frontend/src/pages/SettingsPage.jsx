@@ -3,7 +3,8 @@ import {
     Paper, Typography, Box, Button, Grid, MenuItem, TextField,
     CircularProgress, Alert, Snackbar, Divider, Stack, Checkbox,
     Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-    FormControlLabel, Accordion, AccordionSummary, AccordionDetails
+    FormControlLabel, Accordion, AccordionSummary, AccordionDetails,
+    useTheme, useMediaQuery
 } from '@mui/material';
 import {
     SaveOutlined as SaveIcon,
@@ -44,6 +45,8 @@ function SettingsPage() {
     const [permissions, setPermissions] = useState({});
     const [savingPerms, setSavingPerms] = useState(false);
     const { refreshPermissions } = usePermissions();
+    const theme = useTheme();
+    const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
     useEffect(() => {
         fetchData();
@@ -245,7 +248,7 @@ function SettingsPage() {
                                         startIcon={<SaveIcon />}
                                         onClick={handleSave}
                                         disabled={saving}
-                                        sx={{ py: 1.8, fontSize: '1rem', fontWeight: 700, borderRadius: '14px', mt: 2, alignSelf: 'flex-start' }}
+                                        sx={{ py: 1.8, fontSize: '1rem', fontWeight: 700, borderRadius: '14px', mt: 2, alignSelf: isMobile ? 'stretch' : 'flex-start', width: isMobile ? '100%' : 'auto' }}
                                     >
                                         {saving ? 'Saving...' : 'Save Settings'}
                                     </Button>
@@ -280,79 +283,126 @@ function SettingsPage() {
                     <AccordionDetails sx={{ p: { xs: 3, sm: 4 }, pt: 0 }}>
                         <Divider sx={{ mb: 4, opacity: 0.6 }} />
 
-                        <TableContainer sx={{ borderRadius: '16px', border: '1px solid', borderColor: 'divider' }}>
-                            <Table size="small">
-                                <TableHead>
-                                    <TableRow>
-                                        <TableCell sx={{ fontWeight: 700, minWidth: 140 }}>Menu</TableCell>
-                                        {ROLES.map(role => (
-                                            <TableCell key={role} align="center" colSpan={2} sx={{
-                                                fontWeight: 700,
-                                                textTransform: 'capitalize',
-                                                borderLeft: '1px solid',
-                                                borderColor: 'divider'
-                                            }}>
-                                                {role}
-                                            </TableCell>
-                                        ))}
-                                    </TableRow>
-                                    <TableRow>
-                                        <TableCell />
-                                        {ROLES.map(role => (
-                                            <React.Fragment key={role}>
-                                                <TableCell align="center" sx={{
-                                                    fontSize: '0.7rem',
-                                                    fontWeight: 600,
-                                                    py: 0.5,
+                        {isMobile ? (
+                            <Stack spacing={2}>
+                                {MENU_ITEMS.map((menu) => (
+                                    <Paper elevation={0} key={menu.key} sx={{ p: 2, borderRadius: '16px', border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>
+                                        <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 2, color: 'text.primary' }}>
+                                            {menu.label}
+                                        </Typography>
+                                        <Stack spacing={1}>
+                                            {ROLES.map(role => (
+                                                <Box key={role} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 1.5, bgcolor: 'background.default', borderRadius: '12px', border: '1px solid', borderColor: 'divider' }}>
+                                                    <Typography variant="body2" sx={{ textTransform: 'capitalize', fontWeight: 600, color: 'text.secondary' }}>
+                                                        {role}
+                                                    </Typography>
+                                                    <Box sx={{ display: 'flex', gap: 1 }}>
+                                                        <FormControlLabel
+                                                            control={
+                                                                <Checkbox
+                                                                    size="small"
+                                                                    checked={permissions[role]?.[menu.key]?.can_view || false}
+                                                                    onChange={(e) => handlePermissionChange(role, menu.key, 'can_view', e.target.checked)}
+                                                                />
+                                                            }
+                                                            label={<Typography variant="caption" fontWeight={600}>View</Typography>}
+                                                            labelPlacement="start"
+                                                            sx={{ m: 0 }}
+                                                        />
+                                                        <FormControlLabel
+                                                            control={
+                                                                <Checkbox
+                                                                    size="small"
+                                                                    checked={permissions[role]?.[menu.key]?.can_write || false}
+                                                                    onChange={(e) => handlePermissionChange(role, menu.key, 'can_write', e.target.checked)}
+                                                                />
+                                                            }
+                                                            label={<Typography variant="caption" fontWeight={600}>Write</Typography>}
+                                                            labelPlacement="start"
+                                                            sx={{ m: 0 }}
+                                                        />
+                                                    </Box>
+                                                </Box>
+                                            ))}
+                                        </Stack>
+                                    </Paper>
+                                ))}
+                            </Stack>
+                        ) : (
+                            <TableContainer sx={{ borderRadius: '16px', border: '1px solid', borderColor: 'divider', overflowX: 'auto' }}>
+                                <Table size="small">
+                                    <TableHead>
+                                        <TableRow>
+                                            <TableCell sx={{ fontWeight: 700, minWidth: 140 }}>Menu</TableCell>
+                                            {ROLES.map(role => (
+                                                <TableCell key={role} align="center" colSpan={2} sx={{
+                                                    fontWeight: 700,
+                                                    textTransform: 'capitalize',
                                                     borderLeft: '1px solid',
-                                                    borderColor: 'divider',
-                                                    color: 'text.secondary'
+                                                    borderColor: 'divider'
                                                 }}>
-                                                    View
+                                                    {role}
                                                 </TableCell>
-                                                <TableCell align="center" sx={{
-                                                    fontSize: '0.7rem',
-                                                    fontWeight: 600,
-                                                    py: 0.5,
-                                                    color: 'text.secondary'
-                                                }}>
-                                                    Write
-                                                </TableCell>
-                                            </React.Fragment>
-                                        ))}
-                                    </TableRow>
-                                </TableHead>
-                                <TableBody>
-                                    {MENU_ITEMS.map((menu) => (
-                                        <TableRow key={menu.key} hover>
-                                            <TableCell sx={{ fontWeight: 500 }}>{menu.label}</TableCell>
+                                            ))}
+                                        </TableRow>
+                                        <TableRow>
+                                            <TableCell />
                                             {ROLES.map(role => (
                                                 <React.Fragment key={role}>
-                                                    <TableCell align="center" sx={{ borderLeft: '1px solid', borderColor: 'divider' }}>
-                                                        <Checkbox
-                                                            size="small"
-                                                            checked={permissions[role]?.[menu.key]?.can_view || false}
-                                                            onChange={(e) => handlePermissionChange(role, menu.key, 'can_view', e.target.checked)}
-                                                            sx={{ p: 0.5 }}
-                                                        />
+                                                    <TableCell align="center" sx={{
+                                                        fontSize: '0.7rem',
+                                                        fontWeight: 600,
+                                                        py: 0.5,
+                                                        borderLeft: '1px solid',
+                                                        borderColor: 'divider',
+                                                        color: 'text.secondary'
+                                                    }}>
+                                                        View
                                                     </TableCell>
-                                                    <TableCell align="center">
-                                                        <Checkbox
-                                                            size="small"
-                                                            checked={permissions[role]?.[menu.key]?.can_write || false}
-                                                            onChange={(e) => handlePermissionChange(role, menu.key, 'can_write', e.target.checked)}
-                                                            sx={{ p: 0.5 }}
-                                                        />
+                                                    <TableCell align="center" sx={{
+                                                        fontSize: '0.7rem',
+                                                        fontWeight: 600,
+                                                        py: 0.5,
+                                                        color: 'text.secondary'
+                                                    }}>
+                                                        Write
                                                     </TableCell>
                                                 </React.Fragment>
                                             ))}
                                         </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </TableContainer>
+                                    </TableHead>
+                                    <TableBody>
+                                        {MENU_ITEMS.map((menu) => (
+                                            <TableRow key={menu.key} hover>
+                                                <TableCell sx={{ fontWeight: 500 }}>{menu.label}</TableCell>
+                                                {ROLES.map(role => (
+                                                    <React.Fragment key={role}>
+                                                        <TableCell align="center" sx={{ borderLeft: '1px solid', borderColor: 'divider' }}>
+                                                            <Checkbox
+                                                                size="small"
+                                                                checked={permissions[role]?.[menu.key]?.can_view || false}
+                                                                onChange={(e) => handlePermissionChange(role, menu.key, 'can_view', e.target.checked)}
+                                                                sx={{ p: 0.5 }}
+                                                            />
+                                                        </TableCell>
+                                                        <TableCell align="center">
+                                                            <Checkbox
+                                                                size="small"
+                                                                checked={permissions[role]?.[menu.key]?.can_write || false}
+                                                                onChange={(e) => handlePermissionChange(role, menu.key, 'can_write', e.target.checked)}
+                                                                sx={{ p: 0.5 }}
+                                                            />
+                                                        </TableCell>
+                                                    </React.Fragment>
+                                                ))}
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </TableContainer>
+                        )}
 
-                        <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
+                        <Box sx={{ mt: 3, display: 'flex', justifyContent: isMobile ? 'center' : 'flex-end', flexDirection: isMobile ? 'column' : 'row' }}>
                             <Button
                                 variant="contained"
                                 //color="secondary"
@@ -360,7 +410,7 @@ function SettingsPage() {
                                 startIcon={<SaveIcon />}
                                 onClick={handleSavePermissions}
                                 disabled={savingPerms}
-                                sx={{ py: 1.8, px: 4, fontSize: '1rem', fontWeight: 700, borderRadius: '14px' }}
+                                sx={{ py: 1.8, px: 4, fontSize: '1rem', fontWeight: 700, borderRadius: '14px', width: isMobile ? '100%' : 'auto' }}
                             >
                                 {savingPerms ? 'Saving...' : 'Save Permissions'}
                             </Button>
